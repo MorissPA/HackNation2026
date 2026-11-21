@@ -210,12 +210,12 @@ Wynik dla Modlikowic:
    - przy zmianie umowy (protokół konieczności, aneks): koszt zmiany i przesunięcie terminu – nie mylone z budżetem.
 
    **Doczytanie modelem** (przycisk „Doczytaj szczegóły modelem”, API `use_llm: true`, kod `riskminer/llm_extract.py`):
-   - model czyta cały dokument i rozpoznaje kontekst: która kwota jest budżetem całkowitym (nie dotacją), która długość dotyczy głównej sieci, przepustowość docelowa vs obecna, czas realizacji z dat, rodzaj wynagrodzenia, dodatkowe kategorie ograniczeń (R01, R05, R06, R08–R13), sprzeczności i braki;
-   - każda wartość ma cytat sprawdzony w dokumencie, a liczba musi być w cytacie – inaczej wynik jest odrzucany;
-   - reguły mają pierwszeństwo: inna wartość modelu trafia do wyboru eksperta („wskazanie modelu”), nic nie jest nadpisywane;
+   - liczby (budżet, długość, przepustowość, termin, koszt zmiany) odczytują reguły; model lokalny dostaje to, czego reguły nie potrafią: okoliczności ryzyka (17 kategorii z opisem, R01–R13), sprzeczności i braki – przy jednoczesnym odczycie wszystkich liczb Bielik 11B zapętlał się i mylił koszt zmiany z budżetem;
+   - każda pozycja ma cytat sprawdzony w dokumencie, a cytat musi pasować do kategorii (słowa kontrolne) – inaczej jest odrzucana; ucięta odpowiedź jest naprawiana (zostają kompletne pozycje);
+   - wartości liczbowe od dostawcy zewnętrznego (pole `wartosci`) są obsługiwane: inna wartość niż reguła trafia do wyboru eksperta („wskazanie modelu”), nic nie jest nadpisywane;
    - długie dokumenty (PFU, SWZ) dzielone są na fragmenty z liczbami i słowami kluczowymi (do 4 wywołań);
    - **uczenie z decyzji eksperta bez douczania modelu:** wybór eksperta w konflikcie (np. właściwy budżet) zapisuje się w tabeli `feature_feedback` i trafia do kolejnych zapytań jako wzorzec (najbardziej podobne rozstrzygnięcia);
-   - wynik jest zapamiętany (`llm_extract`), więc przeliczenie po wyborze eksperta jest natychmiastowe;
+   - zapamiętujemy surowe odpowiedzi modelu (`llm_extract`), a weryfikację liczymy przy każdym odczycie – przeliczenie po wyborze eksperta jest natychmiastowe;
    - szybkość: z GPU Apple (`LLM_GPU_LAYERS=-1`) ok. 30–60 s na dokument; na CPU / w Dockerze kilka minut.
 
    **Ocena odczytu:** `.venv/bin/python cli.py eval-extract` (albo `--bez-modelu`) – zbiór testowy w `docs/ekstrakcja/` (tekst dokumentu + `oczekiwane.json`), wynik w `docs/ekstrakcja_ewaluacja.md`. Każdy nowy prawdziwy dokument z poprawnymi wartościami dopisany do zbioru pozwala zmierzyć, czy zmiana reguł lub modelu poprawia wynik.

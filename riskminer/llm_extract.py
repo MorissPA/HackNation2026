@@ -19,7 +19,7 @@ import requests
 from . import analysis, config, llm, local_model
 
 SUBSECTOR_NAMES = [name for name, _ in analysis.SUBSECTORS]
-CONSTRAINT_NAMES = [name for name, _ in analysis.CONSTRAINTS] + list(analysis.MODEL_CONSTRAINTS)
+CONSTRAINT_NAMES = list(dict.fromkeys([name for name, _ in analysis.CONSTRAINTS] + list(analysis.MODEL_CONSTRAINTS)))
 
 TEXT_VALUES = {
     "podsektor_glowny": SUBSECTOR_NAMES,
@@ -51,46 +51,78 @@ CONSTRAINT_HELP = {
     "niepewne finansowanie": "dotacja lub pożyczka jeszcze nieprzyznana, nabór nieogłoszony",
 }
 
-SYSTEM = """Odczytujesz z dokumentu inwestycji wodno-kanalizacyjnej dane do prognozy kosztów, terminów i ryzyk.
-Odpowiadasz wyłącznie JSON zgodnym ze schematem, po polsku, ZWIĘŹLE.
+# Liczby (budżet, długość, terminy) odczytują reguły – na zbiorze testowym bezbłędnie. Model lokalny (11B) przy
+# jednoczesnym odczycie wszystkich pól liczbowych zapętlał się i mylił koszt zmiany z budżetem, dlatego dostaje
+# tylko to, czego reguły nie potrafią: okoliczności ryzyka, sprzeczności i braki. Pola "wartosci" (verify) zostają
+# obsługiwane dla dostawców zewnętrznych / przyszłych modeli, ale nie są wymagane w schemacie.
+SYSTEM = """Czytasz dokument inwestycji wodno-kanalizacyjnej i wskazujesz okoliczności ryzyka. Odpowiadasz wyłącznie JSON, po polsku, zwięźle.
 
-Zasady:
-1. Tylko informacje zapisane w dokumencie. W "wartosci" wypisz WYŁĄCZNIE pola, które dokument podaje.
-   Pola, którego nie ma, POMIŃ – nie pisz „brak informacji” i nie wpisuj 0.
-2. "cytat" = dosłownie skopiowany, krótki fragment dokumentu (5–20 słów) zawierający wartość.
-3. Liczby w "wartosc" zapisuj cyframi bez spacji (18500000, 3.5).
-4. budzet_brutto / budzet_netto / budzet_bez_vat = całkowita wartość lub koszt inwestycji/zamówienia/umowy.
-   NIE: dofinansowanie, dotacja, pożyczka, wkład własny, kara. Każdą różną kwotę całkowitą wypisz osobno.
-5. koszt_zmiany_umowy = kwota robót dodatkowych/zamiennych lub zwiększenia wynagrodzenia (aneks, protokół).
-6. dlugosc_sieci_km = długość sieci głównego podsektora w km (600 m = 0.6); nie zakres opcjonalny innej sieci.
-7. przepustowosc_m3d, rlm = wartość DOCELOWA, nie obecna i nie z warunków doświadczenia wykonawcy.
-8. czas_realizacji_mies = czas całej umowy; gdy są tylko daty podpisania i zakończenia – wylicz.
-   „Z ostatnich 12 miesięcy”, gwarancja, czas dostaw – to NIE czas realizacji.
-9. zmiana_terminu_dni = o ile dni przesunięto termin umowy (aneks, protokół).
-10. Pola tekstowe – tylko z listy: """ + "; ".join(f"{k}: {' | '.join(v)}" for k, v in TEXT_VALUES.items()) + """.
-11. ograniczenia – kategorie (tylko z listy):
+1. ograniczenia: każda kategoria NAJWYŻEJ RAZ, tylko gdy dokument ją opisuje; "cytat" = dosłowny krótki fragment (5–20 słów).
+   Kategorie (tylko z listy):
 """ + "\n".join(f"   - {k}: {v}" for k, v in CONSTRAINT_HELP.items()) + """
-12. sprzecznosci = ta sama wielkość podana różnie (tekst vs tabela, netto vs budżet, różne jednostki).
-13. braki = do 5 krótkich (do 12 słów) informacji potrzebnych do przygotowania inwestycji, których dokument nie ma."""
+2. sprzecznosci: ta sama wielkość podana w dokumencie różnie (tekst vs tabela, netto vs brutto, różne jednostki), z cytatem.
+3. braki: do 5 krótkich (do 12 słów) informacji potrzebnych do przygotowania inwestycji, których dokument nie podaje.
+Nie powtarzaj pozycji. Gdy nic nie pasuje – pusta lista."""
 
-QUOTE = {"type": "string", "maxLength": 160}  # krótkie cytaty: odpowiedź mieści się w kontekście modelu
+QUOTE = {"type": "string", "maxLength": 120}
 SCHEMA = {
     "type": "object", "additionalProperties": False,
-    "required": ["wartosci", "ograniczenia", "sprzecznosci", "braki"],
+    "required": ["ograniczenia", "sprzecznosci", "braki"],
     "properties": {
-        "wartosci": {"type": "array", "maxItems": 16, "items": {
-            "type": "object", "additionalProperties": False, "required": ["pole", "wartosc", "cytat"],
-            "properties": {"pole": {"enum": NUMBER_FIELDS + list(TEXT_VALUES)},
-                           "wartosc": {"type": "string", "maxLength": 60}, "cytat": QUOTE}}},
-        "ograniczenia": {"type": "array", "maxItems": 8, "items": {
+        "ograniczenia": {"type": "array", "maxItems": 7, "items": {
             "type": "object", "additionalProperties": False, "required": ["kategoria", "cytat"],
             "properties": {"kategoria": {"enum": CONSTRAINT_NAMES}, "cytat": QUOTE}}},
-        "sprzecznosci": {"type": "array", "maxItems": 4, "items": {
+        "sprzecznosci": {"type": "array", "maxItems": 3, "items": {
             "type": "object", "additionalProperties": False, "required": ["opis", "cytat"],
             "properties": {"opis": {"type": "string", "maxLength": 140}, "cytat": QUOTE}}},
-        "braki": {"type": "array", "maxItems": 5, "items": {"type": "string", "maxLength": 110}},
+        "braki": {"type": "array", "maxItems": 5, "items": {"type": "string", "maxLength": 90}},
     },
 }
+
+# Cytat musi zawierać słowo pasujące do kategorii – model czasem przypina kategorię do przypadkowego zdania.
+CATEGORY_CHECK = {
+    **{name: rx for name, rx in analysis.CONSTRAINTS},
+    "istniejący obiekt w eksploatacji": dict(analysis.CONSTRAINTS)["istniejący obiekt w eksploatacji"]
+        + r"|czynn\w* obiekt|ciągłoś|w eksploatacji|wyłączeni\w* (lini|obiekt)",
+    "azbest / stan istniejących sieci": dict(analysis.CONSTRAINTS)["azbest / stan istniejących sieci"] + r"|awari|zużyci|wymian\w* filtr",
+    "przekroczenia: droga, kolej, ciek": dict(analysis.CONSTRAINTS)["przekroczenia: droga, kolej, ciek"] + r"|przekrocz|cieku",
+    "niepełny lub niespójny zakres": r"zakres|opcjonal|do decyzji|do ustalenia|doprecyzow|nie był\w* możliw|niespójn|brak\w* (średnic|parametr)",
+    "nieustalony operator / podział odpowiedzialności": r"operator|eksploat|zarządz|odpowiedzialn|obciąż|nie rozstrzygnięto",
+    "nierealny harmonogram / zależność od innej inwestycji": r"termin|harmonogram|miesi|opóźn|do czasu|skrócon|zdążyć",
+    "wynagrodzenie ryczałtowe przy niepewnym zakresie": r"ryczałt",
+    "ogólnikowe wymagania techniczne": r"możliwie|odpowiedni|bez\w* (limitu|określ)|brak określon|ogóln",
+    "brak procedur prób, rozruchu i odbioru": r"odbi[oó]r|rozruch|prób|badań|badani|laborator",
+    "zawężające warunki udziału lub wskazanie marki": r"warunk|doświadcz|mark|wyłącznie|województw|technologii",
+    "długi czas dostaw / dostępność urządzeń": r"dostaw|zamówieni|oczekiwani|producent|poza UE|urządze",
+    "niepewne finansowanie": r"dotacj|pożyczk|finansow|dofinans|nabór|wniosek|płatnoś",
+}
+
+
+def _repair(raw):
+    """Odpowiedź ucięta limitem tokenów: zostawiamy kompletne pozycje i domykamy nawiasy."""
+    raw = llm._json_part(raw)
+    for end in range(len(raw), 0, -1):
+        if raw[end - 1] not in "}]":
+            continue
+        stack, in_str, esc = [], False, False
+        for ch in raw[:end]:
+            if in_str:
+                esc, in_str = (not esc and ch == "\\"), in_str if (esc or ch != '"') else False
+                continue
+            if ch == '"':
+                in_str = True
+            elif ch in "{[":
+                stack.append("}" if ch == "{" else "]")
+            elif ch in "}]" and stack:
+                stack.pop()
+        if in_str:
+            continue
+        try:
+            return json.loads(raw[:end].rstrip().rstrip(",") + "".join(reversed(stack)))
+        except ValueError:
+            continue
+    raise ValueError("brak poprawnego JSON")
+
 
 # Część dokumentu z odpowiedziami („Klucz testowy – co powinien wykryć…”) nie trafia do modelu.
 _ANSWER_KEY = re.compile(r"^\s*(?:klucz\s+testowy|co\s+powin\w+\s+wykry)", re.I | re.M)
@@ -102,8 +134,14 @@ def _norm(text):
 
 
 def find_quote(quote, text):
-    """Zwraca fragment dokumentu odpowiadający cytatowi albo None (cytat nie z dokumentu)."""
+    """Zwraca fragment dokumentu odpowiadający cytatowi albo None (cytat nie z dokumentu).
+    Cytat z pominięciem „(...)” – każda część musi być w dokumencie; słowo ucięte limitem długości pomijamy."""
+    parts = [x.strip() for x in re.split(r"\(\s*(?:\.\.\.|…)\s*\)|\.\.\.|…", quote or "") if x.strip()]
+    if len(parts) > 1:
+        return _WS.sub(" ", quote).strip() if all(find_quote(x, text) for x in parts if len(x.split()) >= 2) else None
     q = _norm(quote)
+    if q and q not in _norm(text) and " " in q:
+        q = q.rsplit(" ", 1)[0]  # ostatnie słowo mogło zostać ucięte
     if len(q) < 8:
         return None
     if q in _norm(text):
@@ -152,7 +190,7 @@ def _complete(messages, max_tokens):
 
 
 # ------------------------------------------------------------------ długie dokumenty
-OUTPUT_TOKENS = 900
+OUTPUT_TOKENS = 1000
 CHARS_PER_TOKEN = 2.5  # polski tekst w tokenizerze Bielika – ostrożnie
 MAX_CHUNKS = 4
 _RELEVANT = re.compile(
@@ -238,7 +276,10 @@ def _call(doc, hints):
     messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
     try:
         raw = _complete(messages, max_tokens=OUTPUT_TOKENS)
-        return json.loads(llm._json_part(raw))
+        try:
+            return json.loads(llm._json_part(raw))
+        except ValueError:
+            return _repair(raw)
     except local_model.LocalModelError as exc:
         raise llm.ModelError(str(exc)) from exc
     except requests.RequestException as exc:
@@ -270,21 +311,26 @@ def _combine(parts):
 
 
 def extract(con, text):
-    """Zweryfikowany odczyt modelem – z pamięci podręcznej albo z nowego wywołania (po jednym na fragment)."""
+    """Zweryfikowany odczyt modelem. Pamiętamy surowe odpowiedzi modelu, a weryfikację liczymy przy każdym odczycie –
+    poprawka zasad weryfikacji działa bez ponownego (wolnego) czytania dokumentu."""
     chunks, truncated = model_text(text)
     hints = expert_hints(con, "\n".join(chunks))
-    key = hashlib.sha1("\n".join([config.LLM_MODEL, *hints, *chunks]).encode()).hexdigest()
+    key = hashlib.sha1("\n".join(["v2", config.LLM_MODEL, *hints, *chunks]).encode()).hexdigest()
     row = con.execute("SELECT result FROM llm_extract WHERE key=?", (key,)).fetchone()
+    cached = bool(row)
     if row:
-        return dict(json.loads(row[0]), cached=True)
-    t0 = time.time()
-    result = _combine([verify(_call(chunk, hints), chunk) for chunk in chunks])
-    result.update(model=config.LLM_MODEL, seconds=round(time.time() - t0, 1), truncated=truncated,
-                  chunks=len(chunks), hints=len(hints))
-    con.execute("INSERT OR REPLACE INTO llm_extract VALUES (?,?,?,datetime('now'))",
-                (key, config.LLM_MODEL, json.dumps(result, ensure_ascii=False)))
-    con.commit()
-    return dict(result, cached=False)
+        stored = json.loads(row[0])
+    else:
+        t0 = time.time()
+        stored = {"answers": [_call(chunk, hints) for chunk in chunks], "seconds": None}
+        stored["seconds"] = round(time.time() - t0, 1)
+        con.execute("INSERT OR REPLACE INTO llm_extract VALUES (?,?,?,datetime('now'))",
+                    (key, config.LLM_MODEL, json.dumps(stored, ensure_ascii=False)))
+        con.commit()
+    result = _combine([verify(answer, chunk) for answer, chunk in zip(stored["answers"], chunks)])
+    result.update(model=config.LLM_MODEL, seconds=stored["seconds"], truncated=truncated, chunks=len(chunks),
+                  hints=len(hints), cached=cached)
+    return result
 
 
 def _to_number(value):
@@ -316,6 +362,8 @@ def verify(body, text):
         if key != "zmiana_terminu_dni" and not number_in_quote(number, source) and not computed:
             rejected.append(f"{key}: wartości {raw} nie ma w cytacie")
             continue
+        if key.startswith("budzet_") and re.search(r"dodatkow|zamienn|aneks|zmian", source, re.I):
+            key = "koszt_zmiany_umowy"
         if key.startswith("budzet_"):
             vat = {"budzet_brutto": "brutto", "budzet_netto": "netto"}.get(key, "nieokreślony")
             budgets.append({"kwota_zl": number, "vat": vat, "cytat": source})
@@ -339,7 +387,10 @@ def verify(body, text):
     for key in lists:
         for item in body.get(key) or []:
             source = find_quote(item.get("cytat", ""), text) if isinstance(item, dict) else None
-            if source:
+            if source and key == "ograniczenia" and not re.search(CATEGORY_CHECK.get(item.get("kategoria"), "$^"), source, re.I):
+                rejected.append(f"ograniczenia: cytat nie pasuje do kategorii {item.get('kategoria')}")
+                continue
+            if source and not (key == "ograniczenia" and any(x["kategoria"] == item["kategoria"] for x in lists[key])):
                 lists[key].append(dict(item, cytat=source))
             else:
                 rejected.append(f"{key}: cytat spoza dokumentu")

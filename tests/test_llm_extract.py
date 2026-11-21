@@ -53,6 +53,18 @@ class BudgetAndLongDocTests(unittest.TestCase):
         self.assertTrue(all(len(c) <= llm_extract._limit() + 1600 for c in chunks))
 
 
+class RobustnessTests(unittest.TestCase):
+    def test_truncated_answer_keeps_complete_items(self):
+        raw = '{"ograniczenia":[{"kategoria":"niepewne finansowanie","cytat":"Dotacja z UE"},{"kategoria":"warunki gruntowo-wodne","cyt'
+        self.assertEqual(llm_extract._repair(raw)["ograniczenia"][0]["kategoria"], "niepewne finansowanie")
+
+    def test_category_must_match_quote(self):
+        res = llm_extract.verify({"ograniczenia": [
+            {"kategoria": "wynagrodzenie ryczałtowe przy niepewnym zakresie", "cytat": "Całkowity koszt inwestycji oszacowano na 18 500 000 zł brutto"},
+            {"kategoria": "niepewne finansowanie", "cytat": "Dotacja z UE: 10 000 000 zł"}], "sprzecznosci": [], "braki": []}, DOC)
+        self.assertEqual([c["kategoria"] for c in res["ograniczenia"]], ["niepewne finansowanie"])
+
+
 class MergeTests(unittest.TestCase):
     def test_model_fills_gaps_and_disagreement_goes_to_expert(self):
         f = analysis.extract_features(DOC)

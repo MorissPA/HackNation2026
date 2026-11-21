@@ -34,6 +34,20 @@ CONSTRAINTS = [
     ("przekroczenia: droga, kolej, ciek", r"przejści\w* (pod|przez)|przewiert|przecisk|drog\w* (krajow|wojewódzk|powiatow)|lini\w* kolejow|kolej"),
     ("istniejący obiekt w eksploatacji", r"ciągłoś\w* pracy|istniejąc\w* oczyszczal|w trakcie eksploatacji|bez przerw\w* w dostawie|rozbiórk\w* istniejąc"),
     ("azbest / stan istniejących sieci", r"azbest|cementowo-azbestow|inspekcj\w* TV|stan techniczn"),
+    # ogólne zwroty z dokumentów przygotowawczych (PFU, koncepcje) – pozostałe okoliczności rozpoznaje model
+    ("nieustalony operator / podział odpowiedzialności",
+     r"nie\s+rozstrzygnięto[^.]{0,80}(?:zarządza|eksploat|operator)|nieustalon\w* (?:operator|zarządc|eksploatator)"
+     r"|obciążają w całości wykonawc|po stronie wykonawcy w całości"),
+    ("wynagrodzenie ryczałtowe przy niepewnym zakresie", r"wynagrodzeni\w* ryczałtow|ryczałt\w* wynagrodzeni"),
+    ("brak procedur prób, rozruchu i odbioru",
+     r"nie\s+określono[^.]{0,80}(?:prób|odbior|rozruch|badań|próbek|laborator)|procedur\w* (?:prób|odbioru)[^.]{0,80}zostaną ustalone"),
+    ("zawężające warunki udziału lub wskazanie marki",
+     r"wyłącznie mark\w*|tej samej technologii|na terenie województwa|wyłącznie (?:producent|firm)"),
+    ("długi czas dostaw / dostępność urządzeń", r"czas\w* oczekiwania|poza UE|na indywidualne zamówienie"),
+    ("niepewne finansowanie",
+     r"nabór\w* (?:jeszcze )?nie|wniosek\w* (?:jeszcze )?nie|planuje\w* pozyska\w* dofinans|w przypadku braku uzyskania dotacji"),
+    ("nierealny harmonogram / zależność od innej inwestycji",
+     r"nieterminow\w* przebieg|do czasu[^.]{0,80}(?:inwestycji|budow)|zależn\w* od (?:innej|realizacji)|skrócon\w* do minimum"),
     ("warunki gruntowo-wodne", r"geotechn|grunt\w* (słab|nienośn|organiczn)|w[oó]d\w* gruntow|odwodnieni\w* wykop|podtopie"),
 ]
 DESIGN_BUILD = r"zaprojektuj\s+i\s+(wy)?buduj|projektuj\s+i\s+buduj|PFU|program\w* funkcjonalno"
@@ -212,6 +226,9 @@ NEGATED_AFTER = re.compile(r"^\s+(?:nie\s+występuj\w*|nie\s+stwierdzono|nie\s+j
 
 def _constraint_match(text, pattern):
     for match in re.finditer(r"(?:" + pattern + r")\w*", text, re.I):
+        near = text[max(0, match.start() - 40):match.start()]
+        if "„" in near and "”" not in near.rsplit("„", 1)[1]:
+            continue  # wewnątrz nazwy własnej („CZYSTA RZEKA”, „Zielone Tarasy”)
         before = CLAUSE.split(text[max(0, match.start() - 100):match.start()])[-1]
         after = CLAUSE.split(text[match.end():match.end() + 100], maxsplit=1)[0]
         if not NEGATED_BEFORE.search(before) and not NEGATED_AFTER.search(after):
