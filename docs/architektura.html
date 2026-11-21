@@ -1,0 +1,595 @@
+<title>Architektura Risk Miner</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Układ: jedna kolumna dokumentacji technicznej; każdy diagram w osobnej, przewijanej poziomo ramce. */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --fg: #17202b;
+  --muted: #5b6675;
+  --line: #d5dae1;
+  --accent: #1d5fa8;
+  --accent-soft: #e6eef8;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161d; --surface: #19212b; --fg: #e4e9ef; --muted: #9aa6b4; --line: #2d3845;
+    --accent: #6ea8ec; --accent-soft: #1b2b40; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161d; --surface: #19212b; --fg: #e4e9ef; --muted: #9aa6b4; --line: #2d3845;
+  --accent: #6ea8ec; --accent-soft: #1b2b40; color-scheme: dark;
+}
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; line-height: 1.55;
+  padding-block: 32px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 1240px; margin: 0 auto; display: grid; gap: 40px; }
+header { display: grid; gap: 10px; max-width: 72ch; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: 30px; line-height: 1.2; margin: 0; font-weight: 600; text-wrap: balance; }
+h2 { font-size: 20px; margin: 0; font-weight: 600; text-wrap: balance; }
+p { margin: 0; }
+.lead { color: var(--muted); }
+code { font-family: var(--mono); font-size: .9em; }
+section { display: grid; gap: 12px; }
+.sec-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+.tag { font-family: var(--mono); font-size: 11.5px; color: var(--accent); border: 1px solid var(--accent); border-radius: 3px; padding: 1px 6px; }
+figure { margin: 0; display: grid; gap: 10px; min-width: 0; }
+.frame { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; padding: 12px; }
+.frame svg { display: block; width: 100%; min-width: 900px; height: auto; color: var(--fg); }
+figcaption { color: var(--muted); font-size: 14px; max-width: 80ch; }
+ul.notes { margin: 0; padding-left: 18px; color: var(--muted); font-size: 14px; display: grid; gap: 4px; max-width: 90ch; }
+
+/* --- elementy SVG (sterowane tokenami, więc działają w obu motywach) --- */
+svg text { fill: currentColor; font-family: var(--sans); font-size: 12px; }
+svg .t { font-size: 13px; font-weight: 600; }
+svg .s { fill: var(--muted); }
+svg .m { font-family: var(--mono); font-size: 11.5px; }
+svg .mult { font-family: var(--mono); font-size: 11px; }
+svg .lbl { font-size: 11.5px; }
+svg .halo { paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+svg .accent-text { fill: var(--accent); }
+svg .box { fill: var(--surface); stroke: var(--muted); stroke-width: 1.2; }
+svg .key { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+svg .fill-bg { fill: var(--surface); }
+svg .edge { stroke: currentColor; stroke-width: 1.3; fill: none; }
+svg .edge-acc { stroke: var(--accent); stroke-width: 1.6; fill: none; }
+svg .dash { stroke-dasharray: 5 4; }
+svg .life { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 4; }
+svg .act { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.2; }
+svg .frag { fill: none; stroke: var(--muted); stroke-width: 1.2; }
+svg .sep { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 6 4; }
+svg .solid { fill: currentColor; }
+svg .accfill { fill: var(--accent); }
+svg .note { fill: var(--accent-soft); stroke: var(--muted); stroke-width: 1; }
+@media (max-width: 520px) { h1 { font-size: 24px; } }
+</style>
+
+<main>
+  <header>
+    <span class="eyebrow">Risk Miner · prototyp · hackathon MFiPR</span>
+    <h1>Architektura Risk Miner</h1>
+    <p class="lead">Cztery widoki tego samego systemu. Pierwszy pokazuje drogę danych od arkusza do decyzji eksperta. Trzy kolejne opisują go w notacji UML 2.0: model danych w SQLite, przebieg pobrania przypadku z BZP oraz stany powiązania i weryfikacji. Nazwy klas i metod odpowiadają kodowi w <code>risk_miner/riskminer</code>.</p>
+  </header>
+
+  <!-- ============================================================ 1. AUTORSKI -->
+  <section>
+    <div class="sec-head"><h2>Przepływ danych</h2><span class="tag">schemat autorski</span></div>
+    <figure>
+      <div class="frame">
+        <svg viewBox="0 0 1200 470" role="img" aria-label="Siedem etapów od arkusza projektów do decyzji eksperta. Kluczowy etap ustala postępowanie (OCID) jedną z trzech ścieżek. Etapy 3 i 4 korzystają z klienta BZP z limitem tempa i cache, a ekspert odsyła decyzje do etapu powiązania i do karty przypadku.">
+          <defs>
+            <marker id="f1a" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" class="solid"/></marker>
+            <marker id="f1b" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" class="accfill"/></marker>
+          </defs>
+
+          <!-- sprzężenia zwrotne od eksperta -->
+          <path d="M1117,90 V50 H429 V86" class="edge-acc dash" marker-end="url(#f1b)"/>
+          <text x="773" y="42" text-anchor="middle" class="lbl accent-text">potwierdź · zmień · odrzuć powiązanie KPO</text>
+          <path d="M1117,230 V262 H945 V234" class="edge-acc dash" marker-end="url(#f1b)"/>
+          <text x="1031" y="280" text-anchor="middle" class="lbl accent-text">akceptuj · popraw · odrzuć propozycję</text>
+
+          <!-- etapy -->
+          <g>
+            <rect x="10" y="90" width="150" height="140" rx="6" class="box"/>
+            <text x="22" y="114" class="t">Arkusz projektów</text>
+            <text x="22" y="138" class="s">22 rekordy</text>
+            <text x="22" y="156" class="s">XLSX lub CSV</text>
+            <text x="22" y="174" class="s">BZP lub KPO</text>
+            <text x="22" y="212" class="m s">→ wiersze</text>
+          </g>
+          <g>
+            <rect x="182" y="90" width="150" height="140" rx="6" class="box"/>
+            <text x="194" y="114" class="t">Import</text>
+            <text x="194" y="138" class="s">id jako tekst</text>
+            <text x="194" y="156" class="s">raport per wiersz</text>
+            <text x="194" y="174" class="s">bez duplikatów</text>
+            <text x="194" y="212" class="m s">→ project</text>
+          </g>
+          <g>
+            <rect x="354" y="90" width="150" height="140" rx="6" class="key"/>
+            <text x="366" y="114" class="t">Ustal postępowanie</text>
+            <text x="366" y="138">① nr BZP z arkusza</text>
+            <text x="366" y="156">② odwołanie w ogł.</text>
+            <text x="366" y="174">③ ranking KPO</text>
+            <text x="366" y="212" class="m accent-text">→ OCID + link</text>
+          </g>
+          <g>
+            <rect x="526" y="90" width="150" height="140" rx="6" class="box"/>
+            <text x="538" y="114" class="t">Ogłoszenia po OCID</text>
+            <text x="538" y="138" class="s">wynik, zmiany umowy</text>
+            <text x="538" y="156" class="s">wykonanie umowy</text>
+            <text x="538" y="174" class="s">filtr po OCID</text>
+            <text x="538" y="212" class="m s">→ notice + HTML</text>
+          </g>
+          <g>
+            <rect x="698" y="90" width="150" height="140" rx="6" class="box"/>
+            <text x="710" y="114" class="t">Parser</text>
+            <text x="710" y="138" class="s">pole + sekcja + pkt</text>
+            <text x="710" y="156" class="s">części zamówienia</text>
+            <text x="710" y="174" class="s">„N miesięcy” → data</text>
+            <text x="710" y="212" class="m s">→ pola + pkt</text>
+          </g>
+          <g>
+            <rect x="870" y="90" width="150" height="140" rx="6" class="box"/>
+            <text x="882" y="114" class="t">Karta przypadku</text>
+            <text x="882" y="138" class="s">fakt · obliczenie</text>
+            <text x="882" y="156" class="s">propozycja R01–R15</text>
+            <text x="882" y="174" class="s">braki danych</text>
+            <text x="882" y="212" class="m s">→ fact, event, gap</text>
+          </g>
+          <g>
+            <rect x="1042" y="90" width="150" height="140" rx="6" class="box"/>
+            <text x="1054" y="114" class="t">Ekspert</text>
+            <text x="1054" y="138" class="s">sprawdza dowód</text>
+            <text x="1054" y="156" class="s">decyzja + powód</text>
+            <text x="1054" y="174" class="s">historia zmian</text>
+            <text x="1054" y="212" class="m s">→ expert_decision</text>
+          </g>
+
+          <!-- kolejność etapów -->
+          <line x1="160" y1="160" x2="180" y2="160" class="edge" marker-end="url(#f1a)"/>
+          <line x1="332" y1="160" x2="352" y2="160" class="edge" marker-end="url(#f1a)"/>
+          <line x1="504" y1="160" x2="524" y2="160" class="edge" marker-end="url(#f1a)"/>
+          <line x1="676" y1="160" x2="696" y2="160" class="edge" marker-end="url(#f1a)"/>
+          <line x1="848" y1="160" x2="868" y2="160" class="edge" marker-end="url(#f1a)"/>
+          <line x1="1020" y1="160" x2="1040" y2="160" class="edge" marker-end="url(#f1a)"/>
+
+          <!-- klient BZP i API -->
+          <line x1="429" y1="230" x2="429" y2="306" class="edge" marker-end="url(#f1a)"/>
+          <text x="437" y="274" class="lbl">szukaj: nr / NIP / tytuł</text>
+          <line x1="601" y1="230" x2="601" y2="306" class="edge" marker-end="url(#f1a)"/>
+          <text x="609" y="274" class="lbl">pobierz treść</text>
+          <rect x="344" y="310" width="342" height="50" rx="6" class="box"/>
+          <text x="515" y="331" text-anchor="middle" class="t">BZPClient</text>
+          <text x="515" y="349" text-anchor="middle" class="s">odstęp 2,2 s (≤ 27 zapytań/min) · cache w SQLite</text>
+          <line x1="515" y1="362" x2="515" y2="406" class="edge" marker-start="url(#f1a)" marker-end="url(#f1a)"/>
+          <text x="523" y="389" class="lbl">HTTPS · ponów przy 429, 5xx, pustej odpowiedzi</text>
+          <rect x="344" y="410" width="342" height="48" rx="6" class="box"/>
+          <text x="515" y="430" text-anchor="middle" class="t">API BZP · ezamowienia.gov.pl</text>
+          <text x="515" y="448" text-anchor="middle" class="m s">GET /Board/Search · GET /notice</text>
+        </svg>
+      </div>
+      <figcaption>Najważniejszy etap to ustalenie postępowania, wyróżnione kolorem. Bez identyfikatora postępowania (OCID) nie da się połączyć ogłoszenia o zamówieniu z wynikiem, zmianami i wykonaniem umowy. Przerywane strzałki to decyzje eksperta. Ekspert zatwierdza powiązanie i ocenia propozycje, a jego decyzje nie są nadpisywane przy ponownym pobraniu.</figcaption>
+    </figure>
+    <ul class="notes">
+      <li>① <b>Numer BZP z arkusza</b>, np. Steklin <code>2024/BZP 00349631/01</code>. Wyszukiwarka zwraca OCID wprost.</li>
+      <li>② <b>Odwołanie w innym ogłoszeniu</b>, np. Wolin. API nie zwraca ogłoszenia o tym numerze, ale cytuje je zmiana ogłoszenia tego samego zamawiającego.</li>
+      <li>③ <b>Ranking KPO</b>, np. Modlikowice. Kandydaci są szukani po NIP i frazach, a ocena uwzględnia miejscowość, podsektor, nazwę, rodzaj zamówienia i skalę. Wynik trafia do eksperta jako propozycja.</li>
+    </ul>
+  </section>
+
+  <!-- ============================================================ 2. UML KLASY -->
+  <section>
+    <div class="sec-head"><h2>Model danych</h2><span class="tag">UML 2.0 · diagram klas</span></div>
+    <figure>
+      <div class="frame">
+        <svg viewBox="0 0 1200 840" role="img" aria-label="Diagram klas UML. Project składa się z kandydatów, powiązań, faktów, zdarzeń i braków. Powiązanie wskazuje Procedure, która ma ogłoszenia i umowy, a umowa ma zmiany. Zdarzenie wskazuje ogłoszenie źródłowe. Decyzja eksperta dotyczy zdarzenia lub powiązania. Trzy enumeracje opisują rodzaj wpisu i statusy.">
+          <defs>
+            <marker id="f2o" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto-start-reverse"><path d="M0,0 L9,5 L0,10" class="edge"/></marker>
+          </defs>
+
+          <!-- ===== połączenia (pod klasami) ===== -->
+          <!-- Project ◆ LinkCandidate -->
+          <polygon points="300,80 288,74 276,80 288,86" class="solid"/>
+          <line x1="276" y1="80" x2="250" y2="80" class="edge"/>
+          <text x="254" y="98" class="mult">0..6</text>
+          <!-- Project ◆ ProjectLink -->
+          <polygon points="560,60 572,54 584,60 572,66" class="solid"/>
+          <line x1="584" y1="60" x2="620" y2="60" class="edge"/>
+          <text x="616" y="52" text-anchor="end" class="mult">0..*</text>
+          <!-- ProjectLink — Procedure -->
+          <line x1="870" y1="60" x2="930" y2="60" class="edge"/>
+          <text x="876" y="52" class="mult">*</text>
+          <text x="924" y="52" text-anchor="end" class="mult">1</text>
+          <text x="900" y="76" text-anchor="middle" class="lbl s">ocid</text>
+          <!-- Procedure ◆ Contract -->
+          <polygon points="1055,138 1049,150 1055,162 1061,150" class="solid"/>
+          <line x1="1055" y1="162" x2="1055" y2="250" class="edge"/>
+          <text x="1063" y="244" class="mult">0..*</text>
+          <text x="1063" y="204" class="lbl s">umowa per część</text>
+          <!-- Contract ◆ ContractChange -->
+          <polygon points="1055,400 1049,412 1055,424 1061,412" class="solid"/>
+          <line x1="1055" y1="424" x2="1055" y2="490" class="edge"/>
+          <text x="1063" y="484" class="mult">0..*</text>
+          <!-- Procedure — Notice -->
+          <path d="M930,120 H900 V549 H870" class="edge"/>
+          <text x="924" y="112" text-anchor="end" class="mult">1</text>
+          <text x="876" y="541" class="mult">1..*</text>
+          <!-- Project ◆ Fact -->
+          <polygon points="430,170 424,182 430,194 436,182" class="solid"/>
+          <line x1="430" y1="194" x2="430" y2="250" class="edge"/>
+          <text x="438" y="244" class="mult">0..*</text>
+          <!-- Project ◆ Gap -->
+          <polygon points="300,150 288,144 276,150 288,156" class="solid"/>
+          <path d="M276,150 H135 V250" class="edge"/>
+          <text x="143" y="244" class="mult">0..*</text>
+          <!-- Project ◆ Event -->
+          <polygon points="520,170 514,182 520,194 526,182" class="solid"/>
+          <path d="M520,194 V210 H745 V250" class="edge"/>
+          <text x="753" y="244" class="mult">0..*</text>
+          <!-- Event → Notice (źródło) -->
+          <line x1="745" y1="384" x2="745" y2="489" class="edge" marker-end="url(#f2o)"/>
+          <text x="753" y="400" class="mult">*</text>
+          <text x="753" y="442" class="lbl s">źródło</text>
+          <text x="753" y="482" class="mult">0..1</text>
+          <!-- ExpertDecision → Event, ProjectLink -->
+          <path d="M560,540 H595 V320 H619" class="edge" marker-end="url(#f2o)"/>
+          <path d="M595,320 V120 H619" class="edge" marker-end="url(#f2o)"/>
+          <text x="566" y="532" class="lbl s">dotyczy</text>
+          <text x="566" y="556" class="mult">*</text>
+
+          <!-- ===== klasy ===== -->
+          <!-- LinkCandidate -->
+          <rect x="20" y="20" width="230" height="118" class="box"/>
+          <text x="135" y="37" text-anchor="middle" class="t">LinkCandidate</text>
+          <line x1="20" y1="46" x2="250" y2="46" class="edge"/>
+          <text x="28" y="62" class="m">ocid: String</text>
+          <text x="28" y="78" class="m">rank: Integer</text>
+          <text x="28" y="94" class="m">score: 0..100</text>
+          <text x="28" y="110" class="m">title: String</text>
+          <text x="28" y="126" class="m">features: Cecha [1..*]</text>
+
+          <!-- Project -->
+          <rect x="300" y="20" width="260" height="150" class="key"/>
+          <text x="430" y="37" text-anchor="middle" class="t">Project</text>
+          <line x1="300" y1="46" x2="560" y2="46" class="edge-acc"/>
+          <text x="308" y="62" class="m">project_id: String {id}</text>
+          <text x="308" y="78" class="m">name: String</text>
+          <text x="308" y="94" class="m">recipient_id: NIP</text>
+          <text x="308" y="110" class="m">public_id_type: BZP | KPO</text>
+          <text x="308" y="126" class="m">public_id: String</text>
+          <text x="308" y="142" class="m">part_no: Integer</text>
+          <text x="308" y="158" class="m">annotation: String [0..1]</text>
+
+          <!-- ProjectLink -->
+          <rect x="620" y="20" width="250" height="134" class="box"/>
+          <text x="745" y="37" text-anchor="middle" class="t">ProjectLink</text>
+          <line x1="620" y1="46" x2="870" y2="46" class="edge"/>
+          <text x="628" y="62" class="m">ocid: String</text>
+          <text x="628" y="78" class="m">part_no: Integer</text>
+          <text x="628" y="94" class="m">method: String</text>
+          <text x="628" y="110" class="m">score: Real</text>
+          <text x="628" y="126" class="m">status: StatusPowiązania</text>
+          <text x="628" y="142" class="m">evidence: String</text>
+
+          <!-- Procedure -->
+          <rect x="930" y="20" width="250" height="118" class="box"/>
+          <text x="1055" y="37" text-anchor="middle" class="t">Procedure</text>
+          <line x1="930" y1="46" x2="1180" y2="46" class="edge"/>
+          <text x="938" y="62" class="m">ocid: String {id}</text>
+          <text x="938" y="78" class="m">title: String</text>
+          <text x="938" y="94" class="m">organization_id: String</text>
+          <text x="938" y="110" class="m">estimated_value: PLN [0..1]</text>
+          <text x="938" y="126" class="m">has_parts: Boolean</text>
+
+          <!-- Gap -->
+          <rect x="20" y="250" width="230" height="70" class="box"/>
+          <text x="135" y="267" text-anchor="middle" class="t">Gap</text>
+          <line x1="20" y1="276" x2="250" y2="276" class="edge"/>
+          <text x="28" y="292" class="m">key: String</text>
+          <text x="28" y="308" class="m">message: String</text>
+
+          <!-- Fact -->
+          <rect x="300" y="250" width="260" height="166" class="box"/>
+          <text x="430" y="267" text-anchor="middle" class="t">Fact</text>
+          <line x1="300" y1="276" x2="560" y2="276" class="edge"/>
+          <text x="308" y="292" class="m">kind: RodzajWpisu</text>
+          <text x="308" y="308" class="m">key: String</text>
+          <text x="308" y="324" class="m">value: Real | String</text>
+          <text x="308" y="340" class="m">level: umowa | postęp. | projekt</text>
+          <text x="308" y="356" class="m">source: Notice [0..1]</text>
+          <text x="308" y="372" class="m">quote, source_section: String</text>
+          <text x="308" y="388" class="m">formula: String [0..1]</text>
+          <text x="308" y="404" class="m">status: StatusWeryfikacji</text>
+
+          <!-- Event -->
+          <rect x="620" y="250" width="250" height="134" class="box"/>
+          <text x="745" y="267" text-anchor="middle" class="t">Event</text>
+          <line x1="620" y1="276" x2="870" y2="276" class="edge"/>
+          <text x="628" y="292" class="m">event_date: Date [0..1]</text>
+          <text x="628" y="308" class="m">event_type: String</text>
+          <text x="628" y="324" class="m">title: String</text>
+          <text x="628" y="340" class="m">kind: RodzajWpisu</text>
+          <text x="628" y="356" class="m">status: StatusWeryfikacji</text>
+          <text x="628" y="372" class="m">expert_title: String [0..1]</text>
+
+          <!-- Contract -->
+          <rect x="930" y="250" width="250" height="150" class="box"/>
+          <text x="1055" y="267" text-anchor="middle" class="t">Contract</text>
+          <line x1="930" y1="276" x2="1180" y2="276" class="edge"/>
+          <text x="938" y="292" class="m">ocid: String</text>
+          <text x="938" y="308" class="m">part_no: Integer</text>
+          <text x="938" y="324" class="m">contractor_name: String</text>
+          <text x="938" y="340" class="m">value: PLN</text>
+          <text x="938" y="356" class="m">planned_end: Date</text>
+          <text x="938" y="372" class="m">actual_end: Date [0..1]</text>
+          <text x="938" y="388" class="m">paid_total: PLN [0..1]</text>
+
+          <!-- ExpertDecision -->
+          <rect x="300" y="490" width="260" height="134" class="box"/>
+          <text x="430" y="507" text-anchor="middle" class="t">ExpertDecision</text>
+          <line x1="300" y1="516" x2="560" y2="516" class="edge"/>
+          <text x="308" y="532" class="m">target: event | project_link</text>
+          <text x="308" y="548" class="m">decision: String</text>
+          <text x="308" y="564" class="m">comment: String [0..1]</text>
+          <text x="308" y="580" class="m">old_value: String</text>
+          <text x="308" y="596" class="m">new_value: String [0..1]</text>
+          <text x="308" y="612" class="m">created_at: DateTime</text>
+
+          <!-- Notice -->
+          <rect x="620" y="490" width="250" height="118" class="box"/>
+          <text x="745" y="507" text-anchor="middle" class="t">Notice</text>
+          <line x1="620" y1="516" x2="870" y2="516" class="edge"/>
+          <text x="628" y="532" class="m">notice_number: String {id}</text>
+          <text x="628" y="548" class="m">notice_type: String</text>
+          <text x="628" y="564" class="m">publication_date: Date</text>
+          <text x="628" y="580" class="m">html: String</text>
+          <text x="628" y="596" class="m">fields: Pole [*]</text>
+
+          <!-- ContractChange -->
+          <rect x="930" y="490" width="250" height="134" class="box"/>
+          <text x="1055" y="507" text-anchor="middle" class="t">ContractChange</text>
+          <line x1="930" y1="516" x2="1180" y2="516" class="edge"/>
+          <text x="938" y="532" class="m">change_no: String</text>
+          <text x="938" y="548" class="m">change_date: Date [0..1]</text>
+          <text x="938" y="564" class="m">legal_basis: String</text>
+          <text x="938" y="580" class="m">reason: String</text>
+          <text x="938" y="596" class="m">value_change: PLN [0..1]</text>
+          <text x="938" y="612" class="m">source_notice: String</text>
+
+          <!-- enumeracje -->
+          <rect x="20" y="490" width="230" height="98" class="box"/>
+          <text x="135" y="505" text-anchor="middle" class="lbl s">«enumeration»</text>
+          <text x="135" y="521" text-anchor="middle" class="t">RodzajWpisu</text>
+          <line x1="20" y1="530" x2="250" y2="530" class="edge"/>
+          <text x="28" y="546" class="m">fakt</text>
+          <text x="28" y="562" class="m">obliczenie</text>
+          <text x="28" y="578" class="m">propozycja</text>
+
+          <rect x="20" y="600" width="230" height="114" class="box"/>
+          <text x="135" y="615" text-anchor="middle" class="lbl s">«enumeration»</text>
+          <text x="135" y="631" text-anchor="middle" class="t">StatusWeryfikacji</text>
+          <line x1="20" y1="640" x2="250" y2="640" class="edge"/>
+          <text x="28" y="656" class="m">do_weryfikacji</text>
+          <text x="28" y="672" class="m">zaakceptowane</text>
+          <text x="28" y="688" class="m">poprawione</text>
+          <text x="28" y="704" class="m">odrzucone</text>
+
+          <rect x="20" y="726" width="230" height="98" class="box"/>
+          <text x="135" y="741" text-anchor="middle" class="lbl s">«enumeration»</text>
+          <text x="135" y="757" text-anchor="middle" class="t">StatusPowiązania</text>
+          <line x1="20" y1="766" x2="250" y2="766" class="edge"/>
+          <text x="28" y="782" class="m">proponowane</text>
+          <text x="28" y="798" class="m">potwierdzone</text>
+          <text x="28" y="814" class="m">odrzucone</text>
+        </svg>
+      </div>
+      <figcaption>Pełny romb oznacza kompozycję: usunięcie projektu usuwa jego powiązania, kandydatów, fakty, zdarzenia i braki. <code>Procedure</code> (OCID) i jej umowy są współdzielone, bo kilka rekordów może dotyczyć różnych części tego samego postępowania. <code>Fact</code> i <code>Event</code> wskazują ogłoszenie źródłowe z sekcją i cytatem. <code>ExpertDecision</code> przechowuje historię każdej decyzji. Diagram pomija kolumny techniczne, takie jak znaczniki czasu, JSON i cache HTTP.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ============================================================ 3. UML SEKWENCJA -->
+  <section>
+    <div class="sec-head"><h2>Pobranie przypadku z BZP</h2><span class="tag">UML 2.0 · diagram sekwencji</span></div>
+    <figure>
+      <div class="frame">
+        <svg viewBox="0 0 1180 730" role="img" aria-label="Diagram sekwencji. Ekspert uruchamia pobranie, a pipeline w fragmencie alt ustala ogłoszenie bazowe na jeden z trzech sposobów. Potem pobiera powiązane ogłoszenia, w pętli ich treść, parsuje je i zapisuje w SQLite z zachowaniem decyzji eksperta.">
+          <defs>
+            <marker id="f3s" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L8,4 L0,8 z" class="solid"/></marker>
+            <marker id="f3r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto"><path d="M0,0 L9,5 L0,10" class="edge"/></marker>
+          </defs>
+
+          <!-- linie życia -->
+          <line x1="70" y1="64" x2="70" y2="712" class="life"/>
+          <line x1="230" y1="56" x2="230" y2="712" class="life"/>
+          <line x1="400" y1="56" x2="400" y2="712" class="life"/>
+          <line x1="570" y1="56" x2="570" y2="712" class="life"/>
+          <line x1="740" y1="56" x2="740" y2="712" class="life"/>
+          <line x1="910" y1="56" x2="910" y2="712" class="life"/>
+          <line x1="1090" y1="56" x2="1090" y2="712" class="life"/>
+
+          <!-- nagłówki -->
+          <circle cx="70" cy="14" r="6" class="edge fill-bg"/>
+          <line x1="70" y1="20" x2="70" y2="34" class="edge"/>
+          <line x1="60" y1="26" x2="80" y2="26" class="edge"/>
+          <line x1="70" y1="34" x2="62" y2="44" class="edge"/>
+          <line x1="70" y1="34" x2="78" y2="44" class="edge"/>
+          <text x="70" y="58" text-anchor="middle" class="t">Ekspert</text>
+          <g>
+            <rect x="165" y="20" width="130" height="36" class="box"/><text x="230" y="43" text-anchor="middle" class="m">:app.py</text>
+            <rect x="335" y="20" width="130" height="36" class="key"/><text x="400" y="43" text-anchor="middle" class="m">:pipeline</text>
+            <rect x="505" y="20" width="130" height="36" class="box"/><text x="570" y="43" text-anchor="middle" class="m">:matcher</text>
+            <rect x="675" y="20" width="130" height="36" class="box"/><text x="740" y="43" text-anchor="middle" class="m">:BZPClient</text>
+            <rect x="845" y="20" width="130" height="36" class="box"/><text x="910" y="43" text-anchor="middle" class="m">:SQLite</text>
+            <rect x="1025" y="20" width="130" height="36" class="box"/><text x="1090" y="43" text-anchor="middle" class="m">:API BZP</text>
+          </g>
+
+          <!-- aktywacje -->
+          <rect x="224" y="110" width="12" height="590" class="act"/>
+          <rect x="394" y="144" width="12" height="526" class="act"/>
+          <rect x="564" y="374" width="12" height="48" class="act"/>
+
+          <!-- komunikaty 1–2 -->
+          <line x1="76" y1="110" x2="223" y2="110" class="edge" marker-end="url(#f3s)"/>
+          <text x="147" y="104" text-anchor="middle" class="lbl halo">Pobierz dane z BZP</text>
+          <line x1="236" y1="144" x2="393" y2="144" class="edge" marker-end="url(#f3s)"/>
+          <text x="315" y="138" text-anchor="middle" class="lbl m halo">fetch_project(id)</text>
+
+          <!-- fragment alt -->
+          <rect x="330" y="166" width="830" height="272" class="frag"/>
+          <path d="M330,166 h44 v12 l-8,8 h-36 z" class="frag fill-bg"/>
+          <text x="340" y="180" class="lbl t">alt</text>
+          <text x="416" y="196" class="lbl s">[BZP: ogłoszenie dostępne w API]</text>
+          <line x1="406" y1="214" x2="733" y2="214" class="edge" marker-end="url(#f3s)"/>
+          <text x="570" y="208" text-anchor="middle" class="lbl m halo">find_by_number(nr)</text>
+          <line x1="746" y1="238" x2="903" y2="238" class="edge" marker-end="url(#f3s)"/>
+          <text x="825" y="232" text-anchor="middle" class="lbl m halo">get(url) · cache</text>
+          <line x1="746" y1="262" x2="1083" y2="262" class="edge" marker-end="url(#f3s)"/>
+          <text x="915" y="256" text-anchor="middle" class="lbl m halo">GET /Board/Search [brak w cache]</text>
+          <line x1="330" y1="280" x2="1160" y2="280" class="sep"/>
+          <text x="416" y="298" class="lbl s">[BZP: brak w API, np. Wolin]</text>
+          <line x1="406" y1="318" x2="733" y2="318" class="edge" marker-end="url(#f3s)"/>
+          <text x="570" y="312" text-anchor="middle" class="lbl m halo">find_via_references(nr, nazwa, NIP)</text>
+          <line x1="330" y1="336" x2="1160" y2="336" class="sep"/>
+          <text x="416" y="354" class="lbl s">[KPO, np. Modlikowice]</text>
+          <line x1="406" y1="374" x2="563" y2="374" class="edge" marker-end="url(#f3s)"/>
+          <text x="485" y="368" text-anchor="middle" class="lbl m halo">rank(projekt)</text>
+          <line x1="576" y1="398" x2="733" y2="398" class="edge" marker-end="url(#f3s)"/>
+          <text x="655" y="392" text-anchor="middle" class="lbl m halo">search(NIP, fraza) × N</text>
+          <line x1="564" y1="422" x2="407" y2="422" class="edge dash" marker-end="url(#f3r)"/>
+          <text x="485" y="416" text-anchor="middle" class="lbl halo">ranking + cechy</text>
+
+          <!-- powiązane ogłoszenia -->
+          <line x1="406" y1="462" x2="733" y2="462" class="edge" marker-end="url(#f3s)"/>
+          <text x="570" y="456" text-anchor="middle" class="lbl m halo">related_notices(base) · filtr OCID</text>
+
+          <!-- fragment loop -->
+          <rect x="330" y="478" width="830" height="82" class="frag"/>
+          <path d="M330,478 h50 v12 l-8,8 h-42 z" class="frag fill-bg"/>
+          <text x="340" y="492" class="lbl t">loop</text>
+          <text x="416" y="496" class="lbl s">[każde ogłoszenie postępowania]</text>
+          <line x1="406" y1="518" x2="733" y2="518" class="edge" marker-end="url(#f3s)"/>
+          <text x="570" y="512" text-anchor="middle" class="lbl m halo">fetch_full(meta)</text>
+          <line x1="746" y1="542" x2="1083" y2="542" class="edge" marker-end="url(#f3s)"/>
+          <text x="915" y="536" text-anchor="middle" class="lbl m halo">GET /notice (okno ±1 dzień)</text>
+
+          <!-- samowywołanie -->
+          <path d="M406,580 H470 V602 H408" class="edge" marker-end="url(#f3s)"/>
+          <text x="478" y="596" class="lbl halo">parsuj → fakty, obliczenia, propozycje, braki</text>
+
+          <!-- zapis i powrót -->
+          <line x1="406" y1="636" x2="903" y2="636" class="edge" marker-end="url(#f3s)"/>
+          <text x="655" y="630" text-anchor="middle" class="lbl halo">upsert · status eksperta zachowany</text>
+          <line x1="394" y1="666" x2="237" y2="666" class="edge dash" marker-end="url(#f3r)"/>
+          <text x="315" y="660" text-anchor="middle" class="lbl halo">podsumowanie</text>
+          <line x1="224" y1="696" x2="77" y2="696" class="edge dash" marker-end="url(#f3r)"/>
+          <text x="147" y="690" text-anchor="middle" class="lbl halo">karta przypadku</text>
+
+          <!-- notatka -->
+          <path d="M950,590 H1158 V612 V660 H950 Z" class="note"/>
+          <path d="M1146,590 V602 H1158" class="edge"/>
+          <text x="960" y="610" class="lbl">BZPClient pilnuje odstępu 2,2 s</text>
+          <text x="960" y="628" class="lbl">i ponawia przy 429, 5xx lub</text>
+          <text x="960" y="646" class="lbl">pustej odpowiedzi.</text>
+        </svg>
+      </div>
+      <figcaption>Pełna strzałka z wypełnionym grotem to wywołanie, przerywana z otwartym grotem to odpowiedź. Fragment <code>alt</code> ma trzy rozłączne warunki, odpowiadające ścieżkom ①–③ ze schematu przepływu. Wszystkie odpowiedzi API przechodzą przez cache w SQLite, więc ponowne pobranie Steklina nie wysyła żadnego zapytania do BZP.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ============================================================ 4. UML STANY -->
+  <section>
+    <div class="sec-head"><h2>Powiązanie i weryfikacja</h2><span class="tag">UML 2.0 · maszyny stanów</span></div>
+    <figure>
+      <div class="frame">
+        <svg viewBox="0 0 1180 400" role="img" aria-label="Dwie maszyny stanów. Status powiązania zaczyna od potwierdzonego dla numeru BZP, od proponowanego dla jednoznacznego rankingu KPO albo od braku powiązania. Ekspert potwierdza, odrzuca lub wybiera kandydata. Status faktu lub zdarzenia zaczyna od do weryfikacji i przechodzi do zaakceptowanego, poprawionego albo odrzuconego. Wpis niezweryfikowany, którego przeliczenie nie wytworzyło, jest usuwany.">
+          <defs>
+            <marker id="f4a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto"><path d="M0,0 L9,5 L0,10" class="edge"/></marker>
+          </defs>
+
+          <!-- ===== stm ProjectLink.status ===== -->
+          <rect x="10" y="10" width="570" height="380" class="frag"/>
+          <path d="M10,10 h196 v14 l-8,8 h-188 z" class="frag fill-bg"/>
+          <text x="18" y="26" class="lbl t">stm ProjectLink.status</text>
+
+          <circle cx="50" cy="222" r="7" class="solid"/>
+          <rect x="130" y="70" width="150" height="44" rx="12" class="box"/>
+          <text x="205" y="96" text-anchor="middle" class="m">proponowane</text>
+          <rect x="400" y="70" width="150" height="44" rx="12" class="box"/>
+          <text x="475" y="96" text-anchor="middle" class="m">odrzucone</text>
+          <rect x="400" y="200" width="150" height="44" rx="12" class="key"/>
+          <text x="475" y="226" text-anchor="middle" class="m">potwierdzone</text>
+          <rect x="130" y="320" width="150" height="44" rx="12" class="box"/>
+          <text x="205" y="346" text-anchor="middle" class="m">brak powiązania</text>
+
+          <line x1="57" y1="222" x2="398" y2="222" class="edge" marker-end="url(#f4a)"/>
+          <text x="225" y="214" text-anchor="middle" class="lbl halo">[numer BZP lub odwołanie]</text>
+          <line x1="54" y1="216" x2="128" y2="98" class="edge" marker-end="url(#f4a)"/>
+          <text x="122" y="140" class="lbl halo">[KPO: wynik ≥ 60</text>
+          <text x="122" y="154" class="lbl halo">i przewaga ≥ 15]</text>
+          <line x1="54" y1="228" x2="128" y2="336" class="edge" marker-end="url(#f4a)"/>
+          <text x="122" y="290" class="lbl halo">[KPO: brak</text>
+          <text x="122" y="304" class="lbl halo">jednoznacznego]</text>
+          <line x1="280" y1="104" x2="398" y2="204" class="edge" marker-end="url(#f4a)"/>
+          <text x="346" y="148" class="lbl halo">potwierdź</text>
+          <line x1="280" y1="86" x2="398" y2="86" class="edge" marker-end="url(#f4a)"/>
+          <text x="339" y="78" text-anchor="middle" class="lbl halo">odrzuć / inny</text>
+          <line x1="280" y1="336" x2="398" y2="240" class="edge" marker-end="url(#f4a)"/>
+          <text x="334" y="306" class="lbl halo">wybierz kandydata</text>
+
+          <path d="M410,130 H566 V170 H410 Z" class="note"/>
+          <line x1="475" y1="114" x2="475" y2="130" class="edge dash"/>
+          <text x="418" y="147" class="lbl">ten OCID jest pomijany</text>
+          <text x="418" y="162" class="lbl">w kolejnych rankingach</text>
+
+          <!-- ===== stm Fact/Event.status ===== -->
+          <rect x="600" y="10" width="570" height="380" class="frag"/>
+          <path d="M600,10 h196 v14 l-8,8 h-188 z" class="frag fill-bg"/>
+          <text x="608" y="26" class="lbl t">stm Fact / Event.status</text>
+
+          <circle cx="640" cy="122" r="7" class="solid"/>
+          <rect x="700" y="100" width="160" height="44" rx="12" class="box"/>
+          <text x="780" y="126" text-anchor="middle" class="m">do_weryfikacji</text>
+          <rect x="960" y="60" width="150" height="44" rx="12" class="key"/>
+          <text x="1035" y="86" text-anchor="middle" class="m">zaakceptowane</text>
+          <rect x="960" y="160" width="150" height="44" rx="12" class="key"/>
+          <text x="1035" y="186" text-anchor="middle" class="m">poprawione</text>
+          <rect x="960" y="260" width="150" height="44" rx="12" class="box"/>
+          <text x="1035" y="286" text-anchor="middle" class="m">odrzucone</text>
+          <circle cx="780" cy="340" r="10" class="edge fill-bg"/>
+          <circle cx="780" cy="340" r="5" class="solid"/>
+          <text x="780" y="368" text-anchor="middle" class="lbl s">wpis usunięty</text>
+
+          <line x1="647" y1="122" x2="698" y2="122" class="edge" marker-end="url(#f4a)"/>
+          <text x="672" y="114" text-anchor="middle" class="lbl halo">pobranie</text>
+          <path d="M760,100 C760,62 800,62 800,98" class="edge" marker-end="url(#f4a)"/>
+          <text x="780" y="58" text-anchor="middle" class="lbl halo">przeliczenie / odśwież treść</text>
+          <line x1="860" y1="112" x2="958" y2="84" class="edge" marker-end="url(#f4a)"/>
+          <text x="906" y="90" text-anchor="middle" class="lbl halo">akceptuj</text>
+          <line x1="860" y1="130" x2="958" y2="176" class="edge" marker-end="url(#f4a)"/>
+          <text x="868" y="176" class="lbl halo">akceptuj,</text>
+          <text x="868" y="190" class="lbl halo">inna kategoria</text>
+          <line x1="845" y1="144" x2="958" y2="276" class="edge" marker-end="url(#f4a)"/>
+          <text x="858" y="236" class="lbl halo">odrzuć</text>
+          <line x1="780" y1="144" x2="780" y2="328" class="edge" marker-end="url(#f4a)"/>
+          <text x="788" y="270" class="lbl halo">przeliczenie</text>
+          <text x="788" y="284" class="lbl halo">nie wytworzyło wpisu</text>
+
+          <path d="M940,322 H1160 V376 H940 Z" class="note"/>
+          <line x1="1035" y1="304" x2="1035" y2="322" class="edge dash"/>
+          <text x="948" y="342" class="lbl">Stan, kategoria i komentarz</text>
+          <text x="948" y="358" class="lbl">eksperta przetrwają przeliczenie.</text>
+        </svg>
+      </div>
+      <figcaption>Lewa maszyna stanów pokazuje, kiedy powiązanie z BZP jest automatyczne, a kiedy czeka na eksperta. Ponowne pobranie zawsze przelicza przypadek od nowa. Usuwa przy tym tylko wpisy, których nikt jeszcze nie ocenił. Ocena eksperta zmienia stan na końcowy i od tego momentu chroni wpis przed nadpisaniem.</figcaption>
+    </figure>
+  </section>
+</main>
