@@ -16,6 +16,7 @@ export interface Candidate {
 export interface Card {
   project: Row; kpo_value: number | null; links: Row[]; candidates: Candidate[]; contracts: Row[];
   changes: Row[]; facts: Row[]; events: Row[]; gaps: { key: string; message: string }[]; notices: Row[];
+  documents: Row[];
 }
 export interface Job { id: string; status: string; total: number; done: number; current: string | null; log: string[];
   network_calls?: number; sources?: string[] }

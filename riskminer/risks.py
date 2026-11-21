@@ -26,7 +26,7 @@ NAMES = {c: n for c, n, _ in CATALOG}
 
 # (kod, regex) – sygnał w treści przyczyny/opisu zmiany
 RULES = [
-    ("R04", r"pozwoleni\w* wodnoprawn|decyzj\w* (środowiskow|o pozwoleniu)|uzgodnie\w*|postępowani\w* administracyjn|wody polskie|konserwator|RDOŚ"),
+    ("R04", r"pozwoleni\w* wodnoprawn|decyzj\w* (o )?(środowiskow|pozwoleniu)|uzgodnie\w*|postępowani\w* administracyjn|wody polskie|konserwator|RDOŚ|zmian\w* terminu załatwienia|przedłuż\w* postępowania"),
     ("R07", r"robót? dodatkow|roboty dodatkowe|nieprzewidzian|zwiększeni\w* zakresu"),
     ("R01", r"(nieprzewidzian|nieujęt|pominięt)\w* w (PFU|Programie Funkcjonalno|dokumentacji|przedmiarze)|niekompletn\w* dokumentacj|błęd\w* w dokumentacj"),
     ("R02", r"stan\w* istniejąc|azbest|inspekcj\w* TV|nieznan\w* (uzbrojeni|infrastruktur)|warunk\w* gruntow"),

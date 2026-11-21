@@ -115,6 +115,12 @@ def project_card(pid: str, con=Depends(get_con)):
                              "WHERE ocid=? ORDER BY publication_date", (l["ocid"],))
     for n in notices:
         n["label"] = pipeline.NOTICE_LABELS.get(n["notice_type"], n["notice_type"])
+    try:
+        documents = rows(con, "SELECT d.url, d.source, d.title, d.section, d.published_at, d.ext, d.status, d.fetched_at, "
+                              "l.relation, l.page, l.quote FROM document_link l JOIN document d ON d.url=l.url "
+                              "WHERE l.project_id=? ORDER BY d.published_at", (pid,))
+    except Exception:  # baza bez tabel BIP (żaden BIP nie był jeszcze przeszukany)
+        documents = []
     return {
         "project": p,
         "kpo_value": matcher.kpo_value(p.get("annotation")),
@@ -126,6 +132,7 @@ def project_card(pid: str, con=Depends(get_con)):
         "events": events,
         "gaps": rows(con, "SELECT key, message FROM gap WHERE project_id=? ORDER BY key", (pid,)),
         "notices": notices,
+        "documents": documents,
     }
 
 

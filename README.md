@@ -49,6 +49,7 @@ Konfiguracja przez zmienne środowiskowe ([riskminer/config.py](riskminer/config
 | `riskminer/risks.py` | Katalog R01–R15 z materiału eksperckiego i regułowe propozycje kategorii. |
 | `riskminer/db.py` | Schemat SQLite. |
 | `riskminer/analysis.py` | Analiza nowej inwestycji: cechy z opisu/PDF/DOCX, ranking podobnych przypadków, koszty i terminy, flagi i rekomendacje, checklista wodociągowa, eksport CSV/JSON. |
+| `riskminer/bip.py` | Drugie źródło: BIP gminy (d-bip.pl) – przegląd sekcji, odczyt dokumentów, powiązanie z projektem z cytatem i stroną. |
 | `riskminer/expert.py` | Decyzje eksperta (ryzyka, powiązania KPO) – wspólne dla API i Streamlit. |
 | `api.py` | REST API (FastAPI) dla interfejsu w Vite; serwuje też zbudowany `web/dist`. |
 | `web/` | Interfejs: Vite + React + TypeScript (Baza inwestycji z kartą projektu, Weryfikacja eksperta, Analiza nowego projektu). |
@@ -93,6 +94,26 @@ Oficjalne API jest zapasem: używamy go, gdy kopia nie odpowiada albo nie znajdu
    - Na 7 rekordach KPO z paczki nowe reguły wskazały te same postępowania co wcześniejsza wersja z punktami (7/7). W 3 przypadkach (Grodzisko Dolne, Kleszczewo, Zduny) rozstrzygnęła reguła remisu.
 7. **Części zamówienia.** Ogłoszenie o wyniku ma sekcje „Część N”. Rekord ze `Zakres rekordu = część 2` dostaje tylko umowę z części 2. Ogłoszenia o wykonaniu i o zmianie nie podają numeru części, więc przypisujemy je do umowy po wartości, dacie zawarcia i NIP wykonawcy.
 
+## Drugie źródło: BIP gminy
+
+Konfiguracja jest w [bip_sources.json](bip_sources.json): NIP zamawiającego → adres BIP. Na razie obsługujemy system **d-bip.pl** (sekcje `?strona=N`, stronicowanie `,m0,sN,pK.html`, załączniki `pliki/…`), z którego korzysta wiele gmin. Kolejną gminę dodaje się wpisem w tym pliku, bez zmian w kodzie. Kod jest w [riskminer/bip.py](riskminer/bip.py).
+
+Przy pobieraniu projektu, którego zamawiający ma skonfigurowany BIP:
+1. Przeglądamy wszystkie sekcje i strony BIP, a dla każdego załącznika zapisujemy tytuł, sekcję i datę publikacji. Strony są w cache przez 24 h. Pierwszy przegląd BIP Zagrodna (390 stron, 1670 załączników) trwa ok. 5 minut, kolejne korzystają z cache.
+2. Czytamy dwa rodzaje dokumentów:
+   - te, których tytuł wspomina miejscowość projektu razem z jego zakresem albo z obiektem powiązanym,
+   - 4 najnowsze plany finansowe (WPF, plan postępowań).
+   PDF czytamy strona po stronie, a do tego DOCX i ODT. Skany bez warstwy tekstowej i pliki `.doc` zostają z tytułem i datą jako dowodem i trafiają do braków.
+3. Powiązanie z projektem ma cytat i numer strony:
+   - **przedsięwzięcie**: miejscowość i zakres projektu (np. kanalizacja w Modlikowicach),
+   - **powiązana inwestycja**: miejscowość i obiekt, od którego projekt zależy według opisu KPO (np. oczyszczalnia, do której wpięta będzie sieć).
+4. Każdy dokument daje zdarzenie `dokument BIP` na osi czasu. Reguły ryzyk działają też na tytule i cytacie, np. „zmiana terminu załatwienia sprawy” daje R04. Kwota z WPF trafia do faktów na poziomie projektu.
+
+Wynik dla Modlikowic:
+- 10 dokumentów: postępowanie środowiskowe dla oczyszczalni (obwieszczenia, decyzja, zmiana terminu załatwienia sprawy), zapytanie na przyłącze elektryczne oczyszczalni i 3 uchwały WPF,
+- WPF podaje „Budowa oczyszczalni ścieków w Modlikowicach, 2023–2026, 13 700 000,00 zł” (str. 13),
+- 2 propozycje R04 do oceny eksperta.
+
 ## Analiza nowego projektu
 
 1. **Cechy z opisu** (tekst albo PDF z warstwą tekstową / DOCX). Każda cecha ma fragment źródłowy:
@@ -135,7 +156,7 @@ Tabele: `project`, `procedure` (OCID), `project_link` (z metodą dopasowania, do
 
 - Pole „Wartość zmiany” w ogłoszeniu o wykonaniu bywa wypełniane **nową wartością umowy** zamiast różnicy (np. Zakrzew, część 1 i 2). Aplikacja oznacza to jako brak/niepewność, a wzrost kosztu liczy z „Łącznej wartości wynagrodzenia wypłaconej”.
 - Wartość szacunkowa w BZP jest netto, a wartość umowy zwykle brutto. Porównanie ceny z szacunkiem ma przy formule zastrzeżenie o VAT.
-- Dopasowanie KPO korzysta tylko z BZP. Drugie źródło dowodu, czyli dokumenty z BIP gminy (np. Zagrodno), to kolejny etap.
+- BIP jest skonfigurowany na razie dla jednej gminy (Zagrodno). Skany wymagają OCR, którego nie mamy, więc dla nich dowodem jest tytuł i data publikacji.
 - Kilka ogłoszeń o wykonaniu tej samej umowy (korekty, np. Modlikowice) traktujemy tak: obowiązuje najnowsze, a różnice w kluczowych polach pokazujemy w brakach.
 - Link „Otwórz w BZP” używa `moIdentifier`. Format adresu karty w serwisie BZP trzeba jeszcze potwierdzić ręcznie. Pełna treść ogłoszenia jest zawsze dostępna w zakładce „Źródła”.
 - Propozycje ryzyk są regułowe (słowa kluczowe). Model językowy do przyczyny, skutku i kategorii to kolejny etap.

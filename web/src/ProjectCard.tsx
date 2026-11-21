@@ -131,10 +131,40 @@ function Facts({ facts }: { facts: Row[] }) {
   );
 }
 
-function Sources({ notices }: { notices: Row[] }) {
+const DOC_STATUS: Record<string, string> = {
+  ok: "", skan: "skan – bez warstwy tekstowej", format: "format nieodczytywany", "błąd": "błąd odczytu",
+};
+
+function Documents({ documents }: { documents: Row[] }) {
+  if (!documents.length) return null;
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      <h4>Dokumenty z BIP ({documents.length})</h4>
+      <p className="small muted">Drugie źródło: dokumenty z Biuletynu Informacji Publicznej zamawiającego, w których występuje miejscowość
+        projektu razem z jego zakresem („przedsięwzięcie”) albo z obiektem, od którego projekt zależy według opisu KPO („powiązana inwestycja”).</p>
+      {documents.map((d) => (
+        <div key={d.url} className="event" style={{ padding: "8px 12px", display: "grid", gap: 4 }}>
+          <div className="row between">
+            <span><span className="date">{d.published_at ?? "—"}</span> {d.title}</span>
+            <a className="small" href={d.url} target="_blank" rel="noreferrer">Otwórz plik (.{d.ext})</a>
+          </div>
+          <div className="row small">
+            <span className={`chip ${d.relation === "przedsięwzięcie" ? "info" : "neutral"}`}>{d.relation}</span>
+            <span className="muted">{d.source} › {d.section}{d.page ? ` › str. ${d.page}` : ""}</span>
+            {DOC_STATUS[d.status] ? <span className="chip warn">{DOC_STATUS[d.status]}</span> : null}
+          </div>
+          {d.page ? <div className="quote">{d.quote}</div> : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Sources({ notices, documents }: { notices: Row[]; documents: Row[] }) {
   const [open, setOpen] = useState<string | null>(null);
   return (
     <div style={{ display: "grid", gap: 8 }}>
+      <h4>Ogłoszenia BZP ({notices.length})</h4>
       {notices.map((n) => (
         <div key={n.notice_number} className="event">
           <div className="row between" style={{ padding: "8px 12px" }}>
@@ -152,6 +182,7 @@ function Sources({ notices }: { notices: Row[] }) {
         </div>
       ))}
       {!notices.length ? <div className="empty">Brak ogłoszeń.</div> : null}
+      <Documents documents={documents} />
     </div>
   );
 }
@@ -211,7 +242,7 @@ export function ProjectCard({ pid, refreshKey, onFetch, fetching }:
           { id: "timeline", label: `Oś czasu (${card.events.length})` },
           { id: "facts", label: `Fakty i obliczenia (${card.facts.length})` },
           { id: "changes", label: `Zmiany umowy (${card.changes.length})` },
-          { id: "sources", label: `Źródła (${card.notices.length})` },
+          { id: "sources", label: `Źródła (${card.notices.length + (card.documents?.length ?? 0)})` },
         ]} />
         {tab === "timeline" && <Timeline events={card.events} />}
         {tab === "facts" && <Facts facts={card.facts} />}
@@ -226,7 +257,7 @@ export function ProjectCard({ pid, refreshKey, onFetch, fetching }:
               </tbody></table></div>
             <p className="small muted">Ta sama zmiana może występować dwa razy: w ogłoszeniu o zmianie umowy (z datą) i w zbiorczym wykazie w ogłoszeniu o wykonaniu (z numerem).</p>
           </div>) : <div className="empty">Brak zmian umowy w pobranych ogłoszeniach.</div>)}
-        {tab === "sources" && <Sources notices={card.notices} />}
+        {tab === "sources" && <Sources notices={card.notices} documents={card.documents ?? []} />}
       </div>
     </div>
   );
