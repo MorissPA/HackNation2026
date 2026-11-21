@@ -76,6 +76,23 @@ Domyślnie backend wykonuje analizę w swoim procesie za pomocą biblioteki `lla
 
 Własny plik GGUF można wskazać przez `LLM_MODEL_PATH` i opisać przez `LLM_MODEL`. Opcjonalne ustawienia Ollamy i Anthropic znajdują się w [llm.env.example](llm.env.example).
 
+### Wybór modelu i ocena jakości
+
+| Model | Zbiór testowy (49 fragmentów) | Czas | Gdzie |
+|---|---|---|---|
+| **Bielik-11B v2.6 Instruct** (SpeakLeash, Q4_K_M, ~6,7 GB) | **81,6%** – 37 trafnych, 6 częściowo, 6 błędnych | ~6 s / fragment (Mac, GPU Metal) | `npm run dev` / `npm run start` (domyślnie) |
+| Qwen2.5-1.5B Instruct (Q4_K_M, ~1,1 GB) | 56,1% – 26 trafnych, 3 częściowo, 20 błędnych | ~2,5 s / fragment (CPU) | kontener Docker (domyślnie), słabszy sprzęt |
+
+Model wybiera `LLM_MODEL` (`bielik-11b-v2.6-instruct` albo `qwen2.5-1.5b-instruct`); oba pliki pobierają się automatycznie z przypiętej wersji i są sprawdzane sumą SHA-256. `LLM_GPU_LAYERS=-1` włącza GPU (Metal), `0` – sam CPU.
+
+Zbiór testowy to [docs/llm_zbior_testowy.csv](docs/llm_zbior_testowy.csv): każdy unikalny fragment źródłowy z oczekiwaną kategorią przyczyny (lub „brak”, gdy dokument nie podaje przyczyny). Etykiety „zespół” zastępuje automatycznie decyzja eksperta z kolejki weryfikacji. Ocena:
+
+```bash
+.venv/bin/python cli.py eval-llm
+```
+
+Wynik trafia do `docs/llm_ewaluacja_<model>.md`. Przykłady eksperta z tego samego projektu są przy ocenie pomijane. Analiza wszystkich fragmentów naraz: przycisk w zakładce „Dane i reguły” albo `cli.py llm --all`.
+
 Model dostaje katalog R01–R15, kontekst zdarzenia i zapisany fragment dowodowy zmiany umowy lub dokumentu BIP. Przy odrzuconym powiązaniu BIP dokument jest pomijany. Model proponuje jedną główną kategorię i przyczynę albo wskazuje brak podstaw. Aplikacja pobiera cytat ze wskazanego przez model fragmentu oraz zapisuje numer źródła, adres i sekcję. Trafność interpretacji ocenia ekspert w dotychczasowym panelu. Zakres analizy ogranicza się do fragmentów już wydobytych na kartę projektu.
 
 Powtórzenie analizy wykorzystuje zapisane wyniki dla tego samego tekstu, dostawcy, modelu i instrukcji. Błąd usługi lub walidacji pozwala ponowić wywołanie. Ukończone wcześniej fragmenty i decyzje eksperta pozostają zapisane.
@@ -267,6 +284,7 @@ Tabele: `project`, `procedure` (OCID), `project_link` (z metodą dopasowania, do
 | Składnik | Wersja | Licencja |
 |---|---|---|
 | Qwen2.5-1.5B-Instruct (wagi GGUF, Q4_K_M) | – | Apache 2.0 |
+| Bielik-11B-v2.6-Instruct (wagi GGUF, Q4_K_M, SpeakLeash) | – | Apache 2.0 |
 | llama.cpp / llama-cpp-python | 0.3.19 | MIT |
 | FastAPI | 0.128.8 | MIT |
 | Uvicorn | 0.39.0 | BSD-3-Clause |

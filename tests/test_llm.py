@@ -133,6 +133,51 @@ class GuardrailTests(unittest.TestCase):
         self.assertEqual(self.con.execute("SELECT confidence FROM event WHERE kind='propozycja'").fetchone()[0], "niska")
 
 
+class P2Tests(GuardrailTests):
+    """P2: dwie przyczyny, przykłady eksperta bez przecieku z projektu, ocena na zbiorze testowym."""
+    @patch("riskminer.llm.local_model.complete")
+    def test_two_causes_become_two_proposals_and_are_replaced_together(self, complete):
+        self.add_source("Wstrzymano roboty z powodu braku ustalenia granic działek. Agregat zaprojektowany w 2019 roku jest niedostępny.")
+        complete.return_value = json.dumps({"wyniki": [
+            {"kategoria": "R03", "przyczyna": "Brak ustalenia granic działek.", "fragment_id": 1},
+            {"kategoria": "R12", "przyczyna": "Agregat jest niedostępny.", "fragment_id": 2}]})
+        self.assertEqual(llm.analyze_project(self.con, "P")["created"], 2)
+        titles = [r[0] for r in self.con.execute("SELECT title FROM event WHERE kind='propozycja' ORDER BY id")]
+        self.assertTrue(titles[1].endswith("#2"))
+        with self.con:  # zmiana źródła usuwa obie oczekujące propozycje
+            self.con.execute("UPDATE event SET quote='Nowy tekst przyczyny zmiany umowy.' WHERE event_type='zmiana_umowy'")
+        self.assertEqual(self.con.execute("SELECT count(*) FROM event WHERE kind='propozycja'").fetchone()[0], 0)
+
+    def test_expert_examples_skip_same_project(self):
+        with self.con:
+            self.con.execute("INSERT INTO project(project_id,name,created_at,updated_at) VALUES('Q','Inny','','')")
+            for pid in ("P", "Q"):
+                self.con.execute("""INSERT INTO event(project_id,event_type,kind,status,title,quote,source_notice)
+                        VALUES(?,'ryzyko','propozycja','zaakceptowane','R02 Stan','Natrafiono na grunt skalny w wykopie.',?)""",
+                                 (pid, f"BZP {pid}"))
+        self.assertEqual(len(llm.expert_examples(self.con, "Grunt skalny w wykopie przy drodze.")), 1)  # ten sam cytat raz
+        ex = llm.expert_examples(self.con, "Grunt skalny w wykopie przy drodze.", exclude_project="Q")
+        self.assertEqual(ex, [{"cytat": "Natrafiono na grunt skalny w wykopie.", "kategoria": "R02"}])
+
+    @patch("riskminer.llm.local_model.complete")
+    def test_evaluation_scores_against_gold(self, complete):
+        from riskminer import evaluate
+        self.add_source("Ujawniono niekorzystne warunki gruntowe w wykopach.")
+        self.add_source("Obwieszczenie o wszczęciu postępowania w sprawie decyzji.", section="str. 1", title="Obwieszczenie")
+        with TemporaryDirectory() as d:
+            gold = Path(d) / "gold.csv"
+            with open(gold, "w", encoding="utf-8") as fh:
+                fh.write(",".join(evaluate.FIELDS) + "\n")
+                fh.write(f"P,{evaluate.text_key('Ujawniono niekorzystne warunki gruntowe w wykopach.')},R02,,zespół,,\n")
+                fh.write(f"P,{evaluate.text_key('Obwieszczenie o wszczęciu postępowania w sprawie decyzji.')},brak,R04,zespół,,\n")
+            complete.side_effect = [
+                json.dumps({"wyniki": [{"kategoria": "R02", "przyczyna": "Niekorzystne warunki gruntowe.", "fragment_id": 1}]}),
+                json.dumps({"wyniki": [{"kategoria": "R04", "przyczyna": "Postępowanie w sprawie decyzji.", "fragment_id": 1}]})]
+            rep = evaluate.evaluate(self.con, gold, log=lambda m: None)
+        self.assertEqual((rep["n"], rep["correct"], rep["partial"], rep["score_pct"]), (2, 1, 1, 75.0))
+        self.assertIn("| P |", evaluate.to_markdown(rep))
+
+
 class EmbeddedModelTests(unittest.TestCase):
     @patch("riskminer.local_model.requests.get")
     def test_download_publishes_only_complete_verified_weights(self, get):

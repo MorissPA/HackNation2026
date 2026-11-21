@@ -25,7 +25,10 @@ def main():
     rp = sub.add_parser("report", help="Raport z testu: jakość połączeń i analiza nowego projektu (docs/)")
     rp.add_argument("--out", default="docs")
     model = sub.add_parser("llm", help="Przeanalizuj przyczyny i ryzyka w dowodach projektu")
-    model.add_argument("id")
+    model.add_argument("id", nargs="?")
+    model.add_argument("--all", action="store_true", help="wszystkie projekty z fragmentami źródłowymi")
+    ev = sub.add_parser("eval-llm", help="Ocena modelu na zbiorze testowym docs/llm_zbior_testowy.csv")
+    ev.add_argument("--out", default=None, help="plik .md z wynikiem (domyślnie docs/llm_ewaluacja_<model>.md)")
     args = ap.parse_args()
     con = db.connect()
 
@@ -60,10 +63,19 @@ def main():
         (out / "raport_polaczen.csv").write_text(report.to_csv(rep), encoding="utf-8")
         print("Połączenia:", rep["counts"], "| zapisano:", out / "raport_z_testu.md", "i", out / "raport_polaczen.csv")
     elif args.cmd == "llm":
+        if not args.id and not args.all:
+            ap.exit(2, "Podaj identyfikator projektu albo --all\n")
         try:
-            print(llm.analyze_project(con, args.id))
+            print(llm.analyze_all(con) if args.all else llm.analyze_project(con, args.id))
         except (llm.ModelError, KeyError) as exc:
             ap.exit(1, f"Analiza LLM: {exc}\n")
+    elif args.cmd == "eval-llm":
+        import re as _re
+        from riskminer import config, evaluate
+        rep = evaluate.evaluate(con)
+        out = Path(args.out or f"docs/llm_ewaluacja_{_re.sub(r'[^a-z0-9.]+', '_', config.LLM_MODEL.lower())}.md")
+        out.write_text(evaluate.to_markdown(rep), encoding="utf-8")
+        print({k: v for k, v in rep.items() if k != "rows"}, "| zapisano:", out)
     elif args.cmd == "show":
         pid = args.id
         for t, q in [

@@ -2,14 +2,15 @@ import { useEffect, useState } from "react";
 import { api, type ImportReport, type Job, type Risk, type Stats } from "./api";
 import { Spinner, useToast } from "./ui";
 
-function ImportPanel({ stats, job, startFetch, onChanged }: {
-  stats: Stats | null; job: Job | null; startFetch: (ids: string[] | "all") => void; onChanged: () => void;
+function ImportPanel({ stats, job, startFetch, startLlm, onChanged }: {
+  stats: Stats | null; job: Job | null; startFetch: (ids: string[] | "all") => Promise<void>; startLlm: () => Promise<void>; onChanged: () => void;
 }) {
   const toast = useToast();
   const [report, setReport] = useState<ImportReport | null>(null);
   const [busy, setBusy] = useState(false);
   const [over, setOver] = useState(false);
   const running = job?.status === "trwa";
+  const isLlm = job?.kind === "llm";
 
   const runImport = async (fn: () => Promise<ImportReport>) => {
     setBusy(true);
@@ -25,6 +26,10 @@ function ImportPanel({ stats, job, startFetch, onChanged }: {
   };
   const sync = async () => {
     try { await startFetch("all"); toast("Rozpoczęto synchronizację z BZP – postęp widać w dzienniku."); }
+    catch (e) { toast((e as Error).message, true); }
+  };
+  const analyzeAll = async () => {
+    try { await startLlm(); toast("Rozpoczęto analizę wszystkich fragmentów modelem – wyniki trafią do kolejki „Do weryfikacji”."); }
     catch (e) { toast((e as Error).message, true); }
   };
   const changedRows = report?.rows.filter((r) => r.status !== "bez_zmian" || r.message) ?? [];
@@ -45,14 +50,18 @@ function ImportPanel({ stats, job, startFetch, onChanged }: {
       <button className="btn" disabled={busy || !stats?.sample_available} onClick={() => runImport(api.importSample)}
         title="Risk_Miner_dane_projekty.xlsx z paczki organizatora">Importuj paczkę startową organizatora</button>
       <button className="btn btn-primary" style={{ width: "100%" }} disabled={running || !stats?.projects} onClick={sync}>
-        {running ? <><Spinner /> Pobieranie danych z BZP… {job?.done}/{job?.total}</> : "Synchronizuj z rejestrem BZP"}</button>
+        {running && !isLlm ? <><Spinner /> Pobieranie danych z BZP… {job?.done}/{job?.total}</> : "Synchronizuj z rejestrem BZP"}</button>
+      <button className="btn" style={{ width: "100%" }} disabled={running || !stats?.fetched} onClick={analyzeAll}
+        title="Model przechodzi wszystkie fragmenty z przyczynami zmian umów i dokumenty BIP; wyniki zapamiętane nie są liczone ponownie">
+        {running && isLlm ? <><Spinner /> Analiza modelem… projekt {job?.done}/{job?.total}</> : "Analizuj wszystkie źródła modelem językowym"}</button>
+      {stats?.llm_model ? <span className="caption">Model: {stats.llm_model}. Propozycje trafiają do kolejki eksperta – nic nie wchodzi do statystyk bez zatwierdzenia.</span> : null}
       {running && job ? <div className="bar" aria-hidden="true"><div style={{ width: `${(100 * job.done) / Math.max(1, job.total)}%` }} /></div> : null}
 
       <div className="oplog">
         <h3>Dziennik ostatniej operacji</h3>
         <ul>
           {job ? <>
-            <li><b>Synchronizacja BZP – {job.status}</b>: {job.done}/{job.total} rekordów{job.sources?.length ? ` · źródła: ${job.sources.join(", ")}` : ""}
+            <li><b>{isLlm ? `Analiza modelem (${job.model})` : "Synchronizacja BZP"} – {job.status}</b>: {job.done}/{job.total} {isLlm ? "projektów" : "rekordów"}{job.sources?.length ? ` · źródła: ${job.sources.join(", ")}` : ""}
               {job.network_calls != null ? ` · zapytań sieciowych: ${job.network_calls}` : ""}</li>
             {job.log.slice(-12).map((l, i) => <li key={`j${i}`} className="small">{l}</li>)}
           </> : null}
@@ -152,8 +161,8 @@ function CatalogPanel() {
   );
 }
 
-export function DataView({ stats, job, startFetch, onChanged }: {
-  stats: Stats | null; job: Job | null; startFetch: (ids: string[] | "all") => void; onChanged: () => void;
+export function DataView({ stats, job, startFetch, startLlm, onChanged }: {
+  stats: Stats | null; job: Job | null; startFetch: (ids: string[] | "all") => Promise<void>; startLlm: () => Promise<void>; onChanged: () => void;
 }) {
   return (
     <section className="view">
@@ -164,7 +173,7 @@ export function DataView({ stats, job, startFetch, onChanged }: {
         </div>
       </div>
       <div className="cols">
-        <ImportPanel stats={stats} job={job} startFetch={startFetch} onChanged={onChanged} />
+        <ImportPanel stats={stats} job={job} startFetch={startFetch} startLlm={startLlm} onChanged={onChanged} />
         <CatalogPanel />
       </div>
     </section>

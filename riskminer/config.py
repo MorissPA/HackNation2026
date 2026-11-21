@@ -27,7 +27,12 @@ BZP_MAX_ORG_PAGES = int(os.environ.get("BZP_MAX_ORG_PAGES", "25"))
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "llama.cpp")
 LLM_MODEL = os.environ.get("LLM_MODEL", {"llama.cpp": "qwen2.5-1.5b-instruct",
                                          "anthropic": "claude-sonnet-5-5"}.get(LLM_PROVIDER, ""))
-LLM_MODEL_PATH = Path(os.environ.get("LLM_MODEL_PATH", DATA_DIR / "llm" / "qwen.gguf"))
+# Modele lokalne (llama.cpp): nazwa -> plik w data/llm; pobierane automatycznie z przypiętej wersji (local_model.MODELS).
+LOCAL_MODEL_FILES = {"qwen2.5-1.5b-instruct": "qwen.gguf", "bielik-11b-v2.6-instruct": "bielik-11b-v2.6.gguf"}
+LLM_MODEL_PATH = Path(os.environ.get("LLM_MODEL_PATH",
+                                     DATA_DIR / "llm" / LOCAL_MODEL_FILES.get(LLM_MODEL, "qwen.gguf")))
+LLM_GPU_LAYERS = int(os.environ.get("LLM_GPU_LAYERS", "0"))  # -1 = wszystkie warstwy na GPU (Metal), 0 = CPU
+LLM_CONTEXT = int(os.environ.get("LLM_CONTEXT", "6144"))
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
 

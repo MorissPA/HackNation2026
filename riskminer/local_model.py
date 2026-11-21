@@ -11,9 +11,17 @@ import requests
 from . import config
 
 
-MODEL_URL = ("https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/"
-             "91cad51170dc346986eccefdc2dd33a9da36ead9/qwen2.5-1.5b-instruct-q4_k_m.gguf")
-MODEL_SHA256 = "6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e"
+# Przypięte wersje (commit w Hugging Face) i sumy SHA-256 – pobieramy tylko zweryfikowane wagi.
+MODELS = {
+    "qwen.gguf": ("https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/"
+                  "91cad51170dc346986eccefdc2dd33a9da36ead9/qwen2.5-1.5b-instruct-q4_k_m.gguf",
+                  "6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e"),
+    # Bielik-11B v2.6 Instruct (SpeakLeash, Apache-2.0), kwantyzacja Q4_K_M, ~6,7 GB
+    "bielik-11b-v2.6.gguf": ("https://huggingface.co/speakleash/Bielik-11B-v2.6-Instruct-GGUF/resolve/"
+                             "03aee82964b90a8f02aba719fc9cb290d0af7d62/Bielik-11B-v2.6-Instruct.Q4_K_M.gguf",
+                             "5506531e3385d7bba4f667cd4ce9f405244505671fe0d9102351f78195b56c62"),
+}
+MODEL_URL, MODEL_SHA256 = MODELS["qwen.gguf"]  # zgodność wsteczna
 _lock = Lock()
 
 
@@ -21,11 +29,13 @@ class LocalModelError(Exception):
     pass
 
 
-def _download(path):
+def _download(path, url=None, sha256=None):
+    url = url or MODEL_URL
+    sha256 = sha256 or MODEL_SHA256
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = None
     try:
-        with requests.get(MODEL_URL, stream=True, timeout=(10, 90)) as response:
+        with requests.get(url, stream=True, timeout=(10, 90)) as response:
             response.raise_for_status()
             with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as out:
                 tmp = Path(out.name)
@@ -33,7 +43,7 @@ def _download(path):
                 for chunk in response.iter_content(1024 * 1024):
                     out.write(chunk)
                     digest.update(chunk)
-        if digest.hexdigest() != MODEL_SHA256:
+        if digest.hexdigest() != sha256:
             raise LocalModelError("Pobrany model ma błędną sumę kontrolną. Ponów analizę.")
         os.replace(tmp, path)
     finally:
@@ -44,13 +54,14 @@ def _download(path):
 @lru_cache(maxsize=1)
 def _load(path):
     # Tryb CPU działa również wtedy, gdy macOS nie udostępnia urządzenia Metal.
-    os.environ.setdefault("GGML_METAL_DEVICES", "0")
+    if config.LLM_GPU_LAYERS == 0:
+        os.environ.setdefault("GGML_METAL_DEVICES", "0")
     from llama_cpp import Llama
     if not path.is_file():
-        if path != config.DATA_DIR / "llm" / "qwen.gguf":
+        if path.parent != config.DATA_DIR / "llm" or path.name not in MODELS:
             raise LocalModelError(f"Brak wskazanego pliku modelu: {path}")
-        _download(path)
-    return Llama(model_path=str(path), n_ctx=4096, n_gpu_layers=0, verbose=False)
+        _download(path, *MODELS[path.name])
+    return Llama(model_path=str(path), n_ctx=config.LLM_CONTEXT, n_gpu_layers=config.LLM_GPU_LAYERS, verbose=False)
 
 
 def complete(messages, schema):

@@ -13,7 +13,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel
 
-from riskminer import analysis, db, expert, export, importer, llm, matcher, pipeline, risks
+from riskminer import analysis, config, db, expert, export, importer, llm, matcher, pipeline, risks
 from riskminer.bzp.client import BZPClient
 
 # Arkusz organizatora: domyślnie katalog wyżej (paczka „materialy_dla_uczestnikow”), w kontenerze montowany
@@ -65,6 +65,7 @@ def stats(con=Depends(get_con)):
         "links_proposed": one("SELECT count(*) FROM project_link WHERE status='proponowane'"),
         "proposals_open": one("SELECT count(*) FROM visible_event WHERE kind='propozycja' AND status='do_weryfikacji'"),
         "sample_available": SAMPLE.exists(),
+        "llm_model": f"{config.LLM_PROVIDER} / {config.LLM_MODEL}",
     }
 
 
@@ -137,20 +138,7 @@ def put_rules(r: Rules, con=Depends(get_con)):
 # --------------------------------------------------------------------------- kolejka weryfikacji
 def _context(con, notice_number, section):
     """Pola ogłoszenia przed i po cytowanym punkcie – kontekst dowodu w panelu eksperta."""
-    import re as _re
-    if not notice_number or not section:
-        return None, None
-    n = con.execute("SELECT fields_json FROM notice WHERE notice_number=?", (notice_number,)).fetchone()
-    m = _re.search(r"pkt ([\d.]+)", section or "")
-    if not n or not m:
-        return None, None
-    fields = json.loads(n["fields_json"] or "[]")
-    idx = next((i for i, f in enumerate(fields) if f["code"] == m.group(1)), None)
-    if idx is None:
-        return None, None
-    fmt = lambda f: (f"{f['code']}.) {f['label']}: " if f["code"] else "") + (f["value"] or "")[:260]
-    return (fmt(fields[idx - 1]) if idx > 0 else None,
-            fmt(fields[idx + 1]) if idx + 1 < len(fields) else None)
+    return llm.notice_neighbours(con, notice_number, section)
 
 
 @app.get("/api/verify-queue")
@@ -287,6 +275,40 @@ def analyze_risks(pid: str, con=Depends(get_con)):
         raise HTTPException(404, "Nie ma takiego projektu")
     except llm.ModelError as exc:
         raise HTTPException(502, str(exc))
+
+
+def _run_llm_job(job_id):
+    job = JOBS[job_id]
+    con = db.connect()
+
+    def log(msg):
+        with _job_lock:
+            job["log"].append(msg)
+            job["log"] = job["log"][-300:]
+            job["done"] = min(job["total"], job["done"] + 1)
+            job["current"] = msg.split("]")[-1].split(":")[0].strip()
+
+    try:
+        total = llm.analyze_all(con, log=log)
+        log(f"Razem: {total}")
+        job["status"] = "zakończone"
+    except Exception as e:  # np. brak modelu – zadanie kończy się błędem z komunikatem
+        job["status"] = "błąd"
+        log(f"Błąd: {e}")
+    finally:
+        con.close()
+
+
+@app.post("/api/llm/all")
+def analyze_all_sources(con=Depends(get_con)):
+    """Analiza modelem wszystkich fragmentów źródłowych w tle (wyniki zapamiętane nie są liczone ponownie)."""
+    n = con.execute("""SELECT count(DISTINCT project_id) FROM visible_event WHERE event_type IN ('zmiana_umowy','dokument BIP')
+            AND quote IS NOT NULL AND trim(quote)<>'' AND source_section IS NOT NULL""").fetchone()[0]
+    job_id = uuid.uuid4().hex[:10]
+    JOBS[job_id] = {"id": job_id, "status": "trwa", "total": n, "done": 0, "current": None, "log": [],
+                    "kind": "llm", "model": config.LLM_MODEL}
+    threading.Thread(target=_run_llm_job, args=(job_id,), daemon=True).start()
+    return JOBS[job_id]
 
 
 @app.get("/api/notices/html", response_class=HTMLResponse)

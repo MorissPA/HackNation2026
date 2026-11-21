@@ -116,8 +116,8 @@ export default function App() {
   const selectBase = useCallback((id: string | null) => go("baza", id), [go]);
   useEffect(() => { api.stats().then(setStats).catch(() => setStats(null)); }, [refreshKey]);
 
-  const startFetch = useCallback(async (ids: string[] | "all") => {
-    const j = await api.startFetch(ids);
+  const runJob = useCallback(async (start: () => Promise<Job>) => {
+    const j = await start();
     setJob(j);
     if (timer.current) window.clearInterval(timer.current);
     timer.current = window.setInterval(async () => {
@@ -126,6 +126,8 @@ export default function App() {
       if (s.status !== "trwa") { if (timer.current) window.clearInterval(timer.current); timer.current = null; refresh(); }
     }, 1000);
   }, [refresh]);
+  const startFetch = useCallback((ids: string[] | "all") => runJob(() => api.startFetch(ids)), [runJob]);
+  const startLlm = useCallback(() => runJob(api.llmAll), [runJob]);
   useEffect(() => () => { if (timer.current) window.clearInterval(timer.current); }, []);
 
   return (
@@ -141,7 +143,7 @@ export default function App() {
             <ProjectCard pid={pid} refreshKey={refreshKey} onChanged={refresh} fetching={job?.status === "trwa"} onFetch={(id) => startFetch([id])} />
           </div>
         )}
-        {view === "dane" && <DataView stats={stats} job={job} startFetch={startFetch} onChanged={refresh} />}
+        {view === "dane" && <DataView stats={stats} job={job} startFetch={startFetch} startLlm={startLlm} onChanged={refresh} />}
       </main>
       <footer className="site-footer">
         <div className="wrap footer-in">

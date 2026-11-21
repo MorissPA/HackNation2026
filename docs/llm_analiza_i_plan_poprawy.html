@@ -194,6 +194,33 @@
 </table>
 <p>Na 62 źródłach filtr formułek usuwa w całości tylko 3 fragmenty bez treści przyczyny („protokół”, „porozumienie”) – dla nich system wstrzymuje się bez wywołania modelu. Dwa pozostałe problemy (źródła 200 i 236) to rozróżnienie skutku i przyczyny przez mały model; kolejny krok to szerszy kontekst i porównanie większego modelu na zbiorze testowym (P2).</p>
 
+<h2>8. Wynik po wdrożeniu P2 i zmiana modelu na Bielik-11B</h2>
+<p>Wdrożone z P2: zbiór testowy wszystkich unikalnych fragmentów (49, w tym 13 bez przyczyny – np. obwieszczenia z BIP) i polecenie <code>cli.py eval-llm</code>; sąsiednie punkty ogłoszenia w kontekście (podstawa prawna, opis zmiany); przykłady zatwierdzone przez eksperta w prompcie (bez przykładów z tego samego projektu podczas oceny); do 2 przyczyn na fragment; analiza wsadowa wszystkich źródeł (przycisk w „Dane i reguły”, <code>cli.py llm --all</code>); porównanie modeli. Etykiety zbioru to ocena zespołu – decyzja eksperta w kolejce automatycznie je zastępuje.</p>
+<div class="kpis">
+  <div class="kpi"><div class="l">Bielik-11B v2.6</div><div class="v">81,6%</div><div class="n">37 trafnych · 6 częściowo · 6 błędnych</div></div>
+  <div class="kpi"><div class="l">Qwen2.5-1.5B</div><div class="v">56,1%</div><div class="n">26 trafnych · 3 częściowo · 20 błędnych</div></div>
+  <div class="kpi"><div class="l">Wstrzymania (13 bez przyczyny)</div><div class="v">9 vs 3</div><div class="n">Bielik vs Qwen</div></div>
+  <div class="kpi"><div class="l">Czas na fragment</div><div class="v">~6 s</div><div class="n">Bielik na GPU Mac (Metal); Qwen ~2,5 s CPU</div></div>
+</div>
+<table>
+  <thead><tr><th>Co poprawił Bielik</th><th>Gdzie jeszcze się myli</th></tr></thead>
+  <tbody><tr>
+    <td><ul style="margin:0">
+      <li>niedostępny agregat → <b>R12</b> (Qwen: R03/R07)</li>
+      <li>granice działek → <b>R03</b>, sprzeciw mieszkańców → <b>R03</b>, grunt skalny → <b>R02</b>, nieszczelne zasuwy → <b>R02</b></li>
+      <li>tytuły obwieszczeń i wiersz budżetu → poprawnie „brak przyczyny” (Qwen przypisywał R07/R03)</li>
+    </ul></td>
+    <td><ul style="margin:0">
+      <li>zwiększenie przepustowości oczyszczalni (263/269) → R03 zamiast R01/R07</li>
+      <li>waloryzacja wynagrodzenia (282) i ogólne „dodatkowe roboty” (336/338) → wstrzymanie zamiast R08/R07</li>
+      <li>zawiadomienie o zmianie terminu załatwienia sprawy (3796) → wstrzymanie zamiast R04</li>
+      <li>strop komory (200) → nadal R07 zamiast R02 (częściowo)</li>
+    </ul></td>
+  </tr></tbody>
+</table>
+<p><b>Decyzja:</b> Bielik-11B v2.6 jest domyślnym modelem przy uruchomieniu lokalnym (<code>npm run dev</code>, <code>npm run start</code>; GPU Metal). W kontenerze Docker – bez GPU – zostaje lżejszy Qwen; zmiana jednym ustawieniem <code>LLM_MODEL</code>. Szczegóły fragment po fragmencie: <code>docs/llm_ewaluacja_bielik_11b_v2.6_instruct.md</code> i <code>docs/llm_ewaluacja_qwen2.5_1.5b_instruct.md</code>.</p>
+<p><b>Następne kroki:</b> ekspert przechodzi kolejkę (każda decyzja poprawia zbiór testowy i trafia do przykładów w prompcie), doprecyzowanie reguł dla waloryzacji (R08) i ogólnych „robót dodatkowych” (R07) w zakładce „Dane i reguły”, ponowna ocena <code>eval-llm</code> po każdej zmianie.</p>
+
 <div class="foot">Źródła: kod <code>riskminer/llm.py</code>, <code>riskminer/local_model.py</code>, <code>riskminer/config.py</code>; baza <code>data/riskminer.sqlite</code> (tabele <code>llm_run</code>, <code>event</code>) według stanu z 21.11.2026.</div>
 </body>
 </html>

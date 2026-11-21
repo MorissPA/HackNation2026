@@ -5,7 +5,7 @@ export type Row = Record<string, any>;
 
 export interface Stats {
   projects: number; fetched: number; links_confirmed: number; links_proposed: number;
-  proposals_open: number; sample_available: boolean;
+  proposals_open: number; sample_available: boolean; llm_model?: string;
 }
 export interface Feature { name: string; status: string; detail: string }
 export interface Candidate {
@@ -19,6 +19,7 @@ export interface Card {
   documents: Row[];
 }
 export interface Job { id: string; status: string; total: number; done: number; current: string | null; log: string[];
+  kind?: string; model?: string;
   network_calls?: number; sources?: string[] }
 export interface ImportReport { run_id: number; counts: Record<string, number>;
   rows: { row_no: number | null; project_id: string | null; status: string; message: string | null }[] }
@@ -66,6 +67,7 @@ export const api = {
     post<{status: string}>(`/api/projects/${encodeURIComponent(pid)}/documents/decision`, {url, action}),
   decideEvent: (id: number, action: "accept" | "reject", code?: string, comment?: string, exemplar = false) =>
     post<{ status: string }>(`/api/events/${id}/decision`, { action, code, comment, exemplar }),
+  llmAll: () => post<Job>("/api/llm/all"),
   verifyQueue: () => call<QueueItem[]>("/api/verify-queue"),
   proposeRisk: (name: string, effects?: string) => post<{ code: string; status: string }>("/api/risks", { name, effects }),
   decideRisk: (code: string, action: "approve" | "reject", comment?: string) =>

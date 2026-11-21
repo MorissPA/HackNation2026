@@ -330,6 +330,21 @@ def _migrate(con):
         con.execute("ALTER TABLE event ADD COLUMN exemplar INTEGER NOT NULL DEFAULT 0")
     if "confidence" not in cols:  # pewność propozycji modelu: 'wysoka' (zgodna z regułami) / 'niska'
         con.execute("ALTER TABLE event ADD COLUMN confidence TEXT")
+    # druga przyczyna z tego samego źródła („… · źródło N #2”) znika razem ze zmienionym/usuniętym źródłem
+    con.execute("""CREATE TRIGGER IF NOT EXISTS invalidate_pending_llm_second AFTER UPDATE OF quote, source_section, details, source_url ON event
+        WHEN OLD.event_type IN ('zmiana_umowy','dokument BIP')
+         AND (NEW.quote IS NOT OLD.quote OR NEW.source_section IS NOT OLD.source_section
+              OR NEW.details IS NOT OLD.details OR NEW.source_url IS NOT OLD.source_url)
+        BEGIN
+            DELETE FROM event WHERE event_type='ryzyko LLM' AND status='do_weryfikacji'
+              AND project_id=OLD.project_id AND title LIKE '% · źródło ' || OLD.id || ' #2';
+        END""")
+    con.execute("""CREATE TRIGGER IF NOT EXISTS remove_pending_llm_second BEFORE DELETE ON event
+        WHEN OLD.event_type IN ('zmiana_umowy','dokument BIP')
+        BEGIN
+            DELETE FROM event WHERE event_type='ryzyko LLM' AND status='do_weryfikacji'
+              AND project_id=OLD.project_id AND title LIKE '% · źródło ' || OLD.id || ' #2';
+        END""")
     # otwarty katalog ryzyk: R01–R15 + kategorie zaproponowane przez eksperta (do zatwierdzenia)
     con.execute("""CREATE TABLE IF NOT EXISTS risk_category (
         code TEXT PRIMARY KEY, name TEXT NOT NULL, effects TEXT,
