@@ -1,11 +1,15 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// Frontend na :5173, zapytania /api przekazywane do backendu FastAPI na :8000.
+// Frontend na :5173, zapytania /api przekazywane do backendu FastAPI.
+// Port backendu musi być ten sam co w skrypcie "dev:api" w package.json (domyślnie 8080; zmiana: API_PORT=...).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const apiPort: string = (globalThis as any).process?.env?.API_PORT ?? "8080";
+
 export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    proxy: { "/api": { target: "http://127.0.0.1:8000", changeOrigin: true } },
+    proxy: { "/api": { target: `http://127.0.0.1:${apiPort}`, changeOrigin: true } },
   },
 });

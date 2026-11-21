@@ -173,12 +173,8 @@ def _bzp_base(con, client, card, p, log):
                          f"identyfikator postępowania {base['tenderId']}.")}
 
 
-AUTO_PROPOSE_MIN = 60   # minimalny wynik, by zaproponować powiązanie automatycznie
-AUTO_PROPOSE_GAP = 15   # wymagana przewaga nad drugim kandydatem
-
-
-def _features_text(feats):
-    return "; ".join(f"{f['name']}: {f['status']} ({f['detail']}) {f['points']:+d}" for f in feats)
+def _criteria_text(crit):
+    return "; ".join(f"{c['name']}: {c['status']} ({c['detail']})" for c in crit)
 
 
 def _kpo_base(con, client, card, p, log):
@@ -189,6 +185,19 @@ def _kpo_base(con, client, card, p, log):
                             "WHERE l.project_id=? AND l.status='potwierdzone'", (pid,)).fetchone()
     if confirmed and confirmed["base_meta_json"]:
         import json
+        stale = con.execute("SELECT count(*) FROM link_candidate WHERE project_id=? AND confidence IS NULL", (pid,)).fetchone()[0]
+        if stale:  # lista kandydatów z poprzedniej wersji ocen – odświeżamy ją, powiązanie zostaje bez zmian
+            ranked, _ = matcher.rank(client, p, log=log)
+            con.execute("DELETE FROM link_candidate WHERE project_id=? AND ocid<>?", (pid, confirmed["ocid"]))
+            for i, c in enumerate(ranked[:6], 1):
+                b = matcher.base_notice(c["notices"])
+                con.execute(
+                    "INSERT OR REPLACE INTO link_candidate(project_id, ocid, rank, score, title, base_notice, base_meta_json, "
+                    "features_json, notices_json, created_at, confidence, matched, checked) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (pid, c["ocid"], i, c["score"], c["title"], b["noticeNumber"], db.dumps(b), db.dumps(c["criteria"]),
+                     db.dumps(sorted((n["noticeType"], n["noticeNumber"], n["publicationDate"][:10]) for n in c["notices"])),
+                     card.ts, c["confidence"], c["matched"], c["checked"]))
+            con.commit()
         return {"base": json.loads(confirmed["base_meta_json"]), "since": None, "method": confirmed["method"],
                 "status": "potwierdzone", "score": confirmed["score"],
                 "evidence": confirmed["evidence"].split(" Powiązane ogłoszenia znalezione przez:")[0]}
@@ -200,31 +209,48 @@ def _kpo_base(con, client, card, p, log):
     con.execute("DELETE FROM link_candidate WHERE project_id=?", (pid,))
     for i, c in enumerate(ranked[:6], 1):
         b = matcher.base_notice(c["notices"])
-        con.execute("INSERT INTO link_candidate VALUES (?,?,?,?,?,?,?,?,?,?)", (
-            pid, c["ocid"], i, c["score"], c["title"], b["noticeNumber"], db.dumps(b), db.dumps(c["features"]),
-            db.dumps(sorted((n["noticeType"], n["noticeNumber"], n["publicationDate"][:10]) for n in c["notices"])),
-            card.ts))
+        con.execute(
+            "INSERT INTO link_candidate(project_id, ocid, rank, score, title, base_notice, base_meta_json, features_json, "
+            "notices_json, created_at, confidence, matched, checked) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (pid, c["ocid"], i, c["score"], c["title"], b["noticeNumber"], db.dumps(b), db.dumps(c["criteria"]),
+             db.dumps(sorted((n["noticeType"], n["noticeNumber"], n["publicationDate"][:10]) for n in c["notices"])),
+             card.ts, c["confidence"], c["matched"], c["checked"]))
     con.commit()
     search_desc = (f"Szukano w BZP po NIP {info['nip']} od {info['since']}, frazy: {', '.join(info['queries'])}; "
                    f"{len(ranked)} postępowań-kandydatów" + (f" (pominięto odrzucone przez eksperta: {len(rejected)})" if rejected else ""))
     if not ranked:
         card.gap("kpo_link", f"Nie znaleziono kandydatów w BZP. {search_desc}.")
         return {"message": "KPO – brak kandydatów w BZP"}
+    # propozycja automatyczna tylko wtedy, gdy dokładnie jeden kandydat ma wysoką pewność
     top = ranked[0]
-    second = ranked[1]["score"] if len(ranked) > 1 else 0
-    if top["score"] < AUTO_PROPOSE_MIN or top["score"] - second < AUTO_PROPOSE_GAP:
-        card.gap("kpo_link", f"Brak jednoznacznego kandydata (najlepszy {top['score']:.0f}/100, drugi {second:.0f}/100) – "
-                             f"wybierz postępowanie w panelu eksperta. {search_desc}.")
+    high = [c for c in ranked if c["confidence"] == "wysoka"]
+    label = lambda c: f"{c['matched']}/{c['checked']} kryteriów, pewność {c['confidence']}"
+    tie_note = ""
+    if len(high) > 1:
+        # remis: wygrywa kandydat z największą liczbą słów z nazwy przedsięwzięcia w tytule – o ile jest jeden taki
+        best = max(matcher.name_share(c) for c in high)
+        leaders = [c for c in high if matcher.name_share(c) == best]
+        if len(leaders) == 1:
+            others = sorted((matcher.name_share(c) for c in high if c is not leaders[0]), reverse=True)
+            tie_note = (f" Kryteria spełnia {len(high)} kandydatów; wybrano ten, którego tytuł zawiera najwięcej słów "
+                        f"z nazwy przedsięwzięcia ({best:.0%} wobec {others[0]:.0%}).")
+            high = leaders
+    if len(high) != 1:
+        why = "żaden kandydat nie ma wysokiej pewności" if not high else f"{len(high)} kandydatów spełnia wszystkie kryteria w równym stopniu"
+        card.gap("kpo_link", f"Brak jednoznacznego kandydata ({why}; najlepszy: {label(top)}) – wybierz postępowanie "
+                             f"w panelu eksperta. {search_desc}.")
         return {"message": f"KPO – {len(ranked)} kandydatów, wymaga wyboru eksperta"}
+    top = high[0]
+    second = next((c for c in ranked if c is not top), None)
     # porzucamy wcześniejsze automatyczne propozycje innych postępowań
     con.execute("DELETE FROM project_link WHERE project_id=? AND status='proponowane' AND ocid<>?", (pid, top["ocid"]))
     card.gap("kpo_link_do_potwierdzenia",
-             f"Powiązanie z postępowaniem zaproponowane automatycznie ({top['score']:.0f}/100, drugi kandydat "
-             f"{second:.0f}/100) – wymaga potwierdzenia eksperta.")
-    return {"base": matcher.base_notice(top["notices"]), "since": None, "method": "nazwa+NIP+miejscowość",
-            "status": "proponowane", "score": top["score"] / 100,
-            "evidence": f"Ranking kandydatów: {top['score']:.0f}/100 vs {second:.0f}/100. {_features_text(top['features'])}. "
-                        f"{search_desc}."}
+             f"Powiązanie zaproponowane automatycznie ({label(top)}"
+             + (f"; następny kandydat: {label(second)}" if second else "") + ") – wymaga potwierdzenia eksperta." + tie_note)
+    return {"base": matcher.base_notice(top["notices"]), "since": None, "method": "kryteria: nazwa, zamawiający, miejsce, CPV, wartość, daty",
+            "status": "proponowane", "score": top["matched"] / top["checked"] if top["checked"] else 0,
+            "evidence": f"Pewność {top['confidence']} ({top['matched']}/{top['checked']} kryteriów).{tie_note} "
+                        f"{_criteria_text(top['criteria'])}. {search_desc}."}
 
 
 def _run(con, client, card: Card, p: dict, log):

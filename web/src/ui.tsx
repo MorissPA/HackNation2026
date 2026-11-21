@@ -72,3 +72,11 @@ export function ErrorBox({ error }: { error: string | null }) {
 }
 
 export const Spinner = () => <span className="spin" aria-label="Trwa…" />;
+
+export const STATUS_ICON: Record<string, string> = {
+  "pasuje": "✅", "częściowo": "🟨", "nie pasuje": "❌", "różni się": "❌", "brak danych": "❔",
+};
+const CONF: Record<string, string> = { wysoka: "ok", "średnia": "warn", niska: "bad" };
+export function ConfidenceChip({ level }: { level?: string | null }) {
+  return level ? <span className={`chip ${CONF[level] ?? "neutral"}`}>pewność {level}</span> : null;
+}

@@ -231,11 +231,12 @@ def candidates_table(pid, expanded=False):
     with st.expander(f"Kandydaci dopasowania KPO → BZP ({len(cands)})", expanded=expanded):
         icon = {"pasuje": "✅", "częściowo": "🟨", "różni się": "❌", "brak danych": "❔"}
         for c in cands:
-            st.markdown(f"**{c['rank']}. {c['score']:.0f}/100** · {c['title'][:110]}  \n"
-                        f"`{c['ocid']}` · ogłoszenie bazowe {c['base_notice']}")
+            st.markdown(f"**{c['rank']}. {c.get('matched')}/{c.get('checked')} kryteriów · pewność {c.get('confidence')}** · "
+                        f"{c['title'][:110]}  \n`{c['ocid']}` · ogłoszenie bazowe {c['base_notice']}")
             feats = json.loads(c["features_json"])
-            st.dataframe(pd.DataFrame([{"": icon.get(f["status"], ""), "Cecha": f["name"], "Ocena": f["status"],
-                                        "Szczegóły": f["detail"], "Pkt": f["points"]} for f in feats]),
+            icon = {"pasuje": "✅", "częściowo": "🟨", "nie pasuje": "❌", "różni się": "❌", "brak danych": "❔"}
+            st.dataframe(pd.DataFrame([{"": icon.get(f["status"], ""), "Kryterium": f["name"], "Ocena": f["status"],
+                                        "Podstawa": f["detail"]} for f in feats]),
                          hide_index=True, width="stretch")
             st.caption("Ogłoszenia: " + ", ".join(f"{t[2]} {pipeline.NOTICE_LABELS.get(t[0], t[0])} {t[1]}"
                                                    for t in json.loads(c["notices_json"])))
@@ -263,7 +264,7 @@ def view_links():
         return
     st.dataframe(pd.DataFrame([{"ID": r["project_id"], "Przedsięwzięcie": r["name"][:80], "KPO": r["public_id"],
                                 "Status": r["status"] or "brak powiązania", "Metoda": r["method"] or "",
-                                "Wynik": f"{r['score'] * 100:.0f}" if r["score"] else ""} for r in rows]),
+                                "Kryteria": f"{r['score'] * 100:.0f}%" if r["score"] else ""} for r in rows]),
                  hide_index=True, width="stretch")
     pid = st.selectbox("Rekord", [r["project_id"] for r in rows],
                        format_func=lambda x: next(f"{r['project_id']} · {r['name'][:80]} · {r['status'] or 'brak powiązania'}"
@@ -273,7 +274,7 @@ def view_links():
     if not cands:
         st.info("Brak kandydatów – uruchom pobranie danych z BZP dla tego rekordu w widoku Baza inwestycji.")
         return
-    labels = {c["ocid"]: f"{c['rank']}. {c['score']:.0f}/100 · {c['title'][:90]}" for c in cands}
+    labels = {c["ocid"]: f"{c['rank']}. {c.get('matched')}/{c.get('checked')} kryteriów · pewność {c.get('confidence')} · {c['title'][:80]}" for c in cands}
     ocids = list(labels)
     choice = st.selectbox("Postępowanie do powiązania", ocids,
                           index=ocids.index(cur["ocid"]) if cur["ocid"] in labels else 0, format_func=labels.get)

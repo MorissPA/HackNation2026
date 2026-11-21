@@ -7,9 +7,10 @@ export interface Stats {
   projects: number; fetched: number; links_confirmed: number; links_proposed: number;
   proposals_open: number; sample_available: boolean;
 }
-export interface Feature { name: string; status: string; detail: string; points: number }
+export interface Feature { name: string; status: string; detail: string }
 export interface Candidate {
   ocid: string; rank: number; score: number; title: string; base_notice: string;
+  confidence: string | null; matched: number | null; checked: number | null;
   features: Feature[]; notices: { type: string; label: string; number: string; date: string }[];
 }
 export interface Card {

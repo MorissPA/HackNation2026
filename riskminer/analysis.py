@@ -262,89 +262,73 @@ def _stems(text):
     return {w[:6] for w in re.findall(r"[a-ząćęłńóśźż]{4,}", (text or "").lower()) if w not in STOP}
 
 
-def _ratio_points(a, b, pts):
-    if not a or not b:
-        return None
-    r = min(a, b) / max(a, b)
-    return round(pts * r, 1), r
+def _ratio(a, b):
+    return min(a, b) / max(a, b) if a and b else None
 
 
 def compare(new: dict, case: dict, new_text: str):
-    """Zwraca (wynik 0–100, lista cech: pasuje/różni się/brak danych)."""
-    cf, feats, total, max_total = case["features"], [], 0.0, 0.0
+    """Porównanie cech o równej wadze (treść zadania: „łączyć dane strukturalne z treścią opisów
+    i wyjaśniać, które cechy przesądziły o podobieństwie”). Każda cecha: pasuje / częściowo / różni się /
+    brak danych. Zwraca (wynik %, cechy, czy ten sam podsektor główny, podobieństwo opisu)."""
+    cf, feats = case["features"], []
 
-    def add(name, status, detail, pts, mx):
-        nonlocal total, max_total
-        feats.append({"name": name, "status": status, "detail": detail, "points": round(pts, 1), "max": mx})
-        total += pts
-        if status != "brak danych":
-            max_total += mx
+    def add(name, status, detail):
+        feats.append({"name": name, "status": status, "detail": detail})
 
-    nm, cm = (new.get("subsector_main") or {}).get("value"), (cf.get("subsector_main") or {}).get("value")
+    def val(d, key):
+        return (d.get(key) or {}).get("value")
+
+    nm, cm = val(new, "subsector_main"), val(cf, "subsector_main")
+    case_all = ({cm} if cm else set()) | {x["value"] for x in cf.get("subsector_extra", [])}
     if nm and cm:
-        all_c = {cm} | {x["value"] for x in cf["subsector_extra"]}
-        if nm == cm:
-            add("Podsektor główny", "pasuje", nm, 35, 35)
-        elif nm in all_c:
-            add("Podsektor główny", "częściowo", f"nowy: {nm}; w przypadku jako dodatkowy (główny: {cm})", 18, 35)
-        else:
-            add("Podsektor główny", "różni się", f"nowy: {nm}; przypadek: {cm}", 0, 35)
+        add("Podsektor główny", "pasuje" if nm == cm else "częściowo" if nm in case_all else "różni się",
+            nm if nm == cm else f"nowy: {nm}; przypadek: {cm}" + (" (u nas jako dodatkowy)" if nm in case_all else ""))
     else:
-        add("Podsektor główny", "brak danych", f"nowy: {nm or '—'}; przypadek: {cm or '—'}", 0, 35)
+        add("Podsektor główny", "brak danych", f"nowy: {nm or '—'}; przypadek: {cm or '—'}")
 
     ne = {x["value"] for x in new.get("subsector_extra", [])}
-    ce = {x["value"] for x in cf.get("subsector_extra", [])} | ({cm} if cm else set())
     if ne:
-        common = ne & ce
-        add("Podsektory dodatkowe", "pasuje" if common else "różni się",
-            f"wspólne: {', '.join(sorted(common)) or '—'}", 5 * len(common) / len(ne), 5)
+        common = ne & case_all
+        add("Podsektory dodatkowe", "pasuje" if common == ne else "częściowo" if common else "różni się",
+            f"wspólne: {', '.join(sorted(common)) or '—'}")
 
-    nw, cw = (new.get("work_type") or {}).get("value"), (cf.get("work_type") or {}).get("value")
-    if nw and cw:
-        same = nw == cw or "+" in nw or "+" in cw
-        add("Rodzaj prac", "pasuje" if same else "różni się", f"nowy: {nw}; przypadek: {cw}", 10 if same else 0, 10)
-    else:
-        add("Rodzaj prac", "brak danych", f"nowy: {nw or '—'}; przypadek: {cw or '—'}", 0, 10)
+    for key, label in (("work_type", "Rodzaj prac"), ("formula", "Formuła realizacji")):
+        a, b = val(new, key), val(cf, key)
+        if a and b:
+            same = a == b or (key == "work_type" and ("+" in a or "+" in b))
+            add(label, "pasuje" if same else "różni się", a if a == b else f"nowy: {a}; przypadek: {b}")
+        else:
+            add(label, "brak danych", f"nowy: {a or '—'}; przypadek: {b or '—'}")
 
-    nf, cfm = (new.get("formula") or {}).get("value"), (cf.get("formula") or {}).get("value")
-    if nf and cfm:
-        add("Formuła realizacji", "pasuje" if nf == cfm else "różni się", f"nowy: {nf}; przypadek: {cfm}", 15 if nf == cfm else 0, 15)
+    nb, cv = val(new, "budget_pln"), case["contract_value"]
+    r = _ratio(nb, cv)
+    if r is not None:
+        add("Skala: budżet vs wartość umów", "pasuje" if r >= 0.5 else "częściowo" if r >= 0.25 else "różni się",
+            f"{nb:,.0f} zł vs {cv:,.0f} zł (mniejsza to {r:.0%} większej)".replace(",", " "))
     else:
-        add("Formuła realizacji", "brak danych", f"nowy: {nf or '—'}; przypadek: {cfm or '—'}", 0, 15)
-
-    # skala: budżet vs wartość umów, długość sieci
-    nb = (new.get("budget_pln") or {}).get("value")
-    rp = _ratio_points(nb, case["contract_value"], 10)
-    if rp:
-        add("Skala: budżet vs wartość umów", "pasuje" if rp[1] >= 0.5 else "różni się",
-            f"{nb:,.0f} zł vs {case['contract_value']:,.0f} zł (stosunek {rp[1]:.2f})".replace(",", " "), rp[0], 10)
-    else:
-        add("Skala: budżet vs wartość umów", "brak danych",
-            "brak budżetu w opisie" if not nb else "brak wartości umowy w przypadku", 0, 10)
-    nl = (new.get("scale", {}).get("length_km") or {}).get("value")
-    cl = (cf.get("scale", {}).get("length_km") or {}).get("value")
-    rp = _ratio_points(nl, cl, 5)
-    if rp:
-        add("Skala: długość sieci", "pasuje" if rp[1] >= 0.4 else "różni się", f"{nl} km vs {cl} km", rp[0], 5)
+        add("Skala: budżet vs wartość umów", "brak danych", "brak budżetu w opisie" if not nb else "brak wartości umowy w przypadku")
+    nl, cl = val(new.get("scale", {}), "length_km"), val(cf.get("scale", {}), "length_km")
+    r = _ratio(nl, cl)
+    if r is not None:
+        add("Skala: długość sieci", "pasuje" if r >= 0.4 else "różni się", f"{nl} km vs {cl} km")
     elif nl or cl:
-        add("Skala: długość sieci", "brak danych", f"nowy: {nl or '—'} km; przypadek: {cl or '—'} km", 0, 5)
+        add("Skala: długość sieci", "brak danych", f"nowy: {nl or '—'} km; przypadek: {cl or '—'} km")
 
-    # podobieństwo opisu
     a, b = _stems(new_text), _stems(case["text"])
     jac = len(a & b) / len(a | b) if a and b else 0
-    add("Podobieństwo opisu", "pasuje" if jac >= 0.15 else "częściowo" if jac >= 0.07 else "różni się",
-        f"wspólne rdzenie słów: {len(a & b)} (Jaccard {jac:.2f})", 20 * min(1, jac / 0.25), 20)
+    add("Treść opisu", "pasuje" if jac >= 0.15 else "częściowo" if jac >= 0.07 else "różni się",
+        f"wspólne rdzenie słów: {len(a & b)} (Jaccard {jac:.2f})")
 
-    # ograniczenia
-    nc = {x["value"] for x in new.get("constraints", [])}
-    cc = {x["value"] for x in cf.get("constraints", [])}
+    nc, cc = {x["value"] for x in new.get("constraints", [])}, {x["value"] for x in cf.get("constraints", [])}
     if nc:
         common = nc & cc
-        add("Znane ograniczenia", "pasuje" if common else "różni się",
-            f"wspólne: {', '.join(sorted(common)) or '—'}", 5 * len(common) / len(nc), 5)
+        add("Znane ograniczenia", "pasuje" if common == nc else "częściowo" if common else "różni się",
+            f"wspólne: {', '.join(sorted(common)) or '—'}")
 
-    score = round(100 * total / max_total, 1) if max_total else 0
-    return score, feats
+    checked = [f for f in feats if f["status"] != "brak danych"]
+    got = sum(1 if f["status"] == "pasuje" else 0.5 if f["status"] == "częściowo" else 0 for f in checked)
+    score = round(100 * got / len(checked)) if checked else 0
+    return score, feats, (nm is not None and nm == cm), jac
 
 
 # ================================================================ raport
@@ -358,23 +342,27 @@ def _stat(values):
     return s
 
 
-def analyze(con, text: str, top_k: int = 5, min_score: float = 35.0) -> dict:
+def analyze(con, text: str, top_k: int = 5, min_score: float = 50.0) -> dict:
     feats = extract_features(text)
     cases = case_profiles(con)
     ranked = []
     for c in cases:
         if not c["n_contracts"] and not c["risks"]:
             continue  # brak danych o realizacji – nie ma czego porównać
-        score, fs = compare(feats, c, text)
-        ranked.append((score, c, fs))
-    ranked.sort(key=lambda x: -x[0])
-    chosen = [x for x in ranked if x[0] >= min_score][:top_k] or ranked[:3]
+        score, fs, same_sub, jac = compare(feats, c, text)
+        ranked.append((score, c, fs, same_sub, jac))
+    # kolejność: ten sam podsektor główny, potem odsetek pasujących cech, potem podobieństwo treści
+    ranked.sort(key=lambda x: (-x[3], -x[0], -x[4]))
+    chosen = [x[:3] for x in ranked if x[0] >= min_score][:top_k] or [x[:3] for x in ranked[:3]]
 
     similar = []
     for score, c, fs in chosen:
         similar.append({
             "project_id": c["project_id"], "name": c["name"], "recipient": c["recipient"], "score": score,
             "link_status": c["link_status"], "description_source": c["description_source"],
+            "matched": sum(f["status"] == "pasuje" for f in fs),
+            "partial": sum(f["status"] == "częściowo" for f in fs),
+            "checked": sum(f["status"] != "brak danych" for f in fs),
             "matches": [f for f in fs if f["status"] == "pasuje"],
             "differences": [f for f in fs if f["status"] in ("różni się", "częściowo")],
             "missing": [f for f in fs if f["status"] == "brak danych"],
@@ -396,6 +384,16 @@ def analyze(con, text: str, top_k: int = 5, min_score: float = 35.0) -> dict:
                 f"Przedział {label} wymaga co najmniej 3 przypadków z ogłoszeniem o wykonaniu umowy; jest {st['n']}. "
                 "Pokazujemy wartości per przypadek. Do wyliczenia przedziału potrzeba ogłoszeń o wykonaniu umowy "
                 "dla kolejnych podobnych przypadków.")
+    # poziom pewności prognozy (treść zadania: „prognoza powinna pokazywać poziom pewności”)
+    n = min(growth["n"], delay["n"])
+    main = (feats.get("subsector_main") or {}).get("value")
+    same = sum(1 for s in similar if any(f["name"] == "Podsektor główny" and f["status"] == "pasuje" for f in s["features"]))
+    level = "wysoka" if n >= 5 and same == len(similar) else "średnia" if n >= 3 and same >= 2 else "niska"
+    comparison["confidence"] = {
+        "level": level,
+        "basis": f"próba n = {n} przypadków z ogłoszeniem o wykonaniu; {same} z {len(similar)} ma ten sam podsektor główny"
+                 + (f" ({main})" if main else "") + ". Wysoka: n ≥ 5 i wszystkie z tego samego podsektora; średnia: n ≥ 3 "
+                 "i co najmniej 2 z tego samego podsektora; niska: pozostałe."}
     low = [s["project_id"] for s in similar if s["growth_pct"] is not None and s["growth_pct"] < -10]
     if low:
         comparison["notes"].append(
@@ -466,7 +464,7 @@ def to_csv(result: dict) -> str:
     import csv
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";")
-    w.writerow(["project_id", "nazwa", "wynik_podobienstwa", "pasuje", "rozni_sie", "brak_danych", "wartosc_umow_pln",
+    w.writerow(["project_id", "nazwa", "cechy_pasujace_proc", "pasuje", "rozni_sie", "brak_danych", "wartosc_umow_pln",
                 "wyplacono_pln", "wzrost_wyplaty_pct", "termin_planowany_mies", "opoznienie_dni", "liczba_ofert",
                 "ryzyka", "status_powiazania"])
     for s in result["similar"]:

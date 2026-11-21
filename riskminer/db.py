@@ -135,9 +135,12 @@ CREATE TABLE IF NOT EXISTS link_candidate (
     title           TEXT,
     base_notice     TEXT,
     base_meta_json  TEXT,
-    features_json   TEXT,
+    features_json   TEXT,                          -- kryteria: [{name, status, detail}]
     notices_json    TEXT,
     created_at      TEXT,
+    confidence      TEXT,                          -- wysoka / średnia / niska
+    matched         INTEGER,                       -- spełnione kryteria
+    checked         INTEGER,                       -- kryteria możliwe do sprawdzenia
     PRIMARY KEY (project_id, ocid)
 );
 
@@ -269,6 +272,10 @@ def _migrate(con):
     for col in ("expert_title", "expert_comment"):
         if col not in cols:
             con.execute(f"ALTER TABLE event ADD COLUMN {col} TEXT")
+    cols = {r["name"] for r in con.execute("PRAGMA table_info(link_candidate)")}
+    for col, typ in (("confidence", "TEXT"), ("matched", "INTEGER"), ("checked", "INTEGER")):
+        if col not in cols:
+            con.execute(f"ALTER TABLE link_candidate ADD COLUMN {col} {typ}")
     con.commit()
 
 

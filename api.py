@@ -84,7 +84,8 @@ def projects(con=Depends(get_con)):
 
 
 def _candidates(con, pid):
-    out = rows(con, "SELECT project_id, ocid, rank, score, title, base_notice, features_json, notices_json "
+    out = rows(con, "SELECT project_id, ocid, rank, score, title, base_notice, features_json, notices_json, "
+                    "confidence, matched, checked "
                     "FROM link_candidate WHERE project_id=? ORDER BY rank", (pid,))
     for c in out:
         c["features"] = json.loads(c.pop("features_json") or "[]")

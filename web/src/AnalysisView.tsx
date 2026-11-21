@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { api, type Row } from "./api";
-import { ErrorBox, Evidence, LinkChip, Spinner, mln, num, pln } from "./ui";
+import { ConfidenceChip, ErrorBox, Evidence, LinkChip, STATUS_ICON, Spinner, mln, num, pln } from "./ui";
 
 const EXAMPLES: { label: string; text: string }[] = [
   {
@@ -23,7 +23,6 @@ const EXAMPLES: { label: string; text: string }[] = [
   },
 ];
 
-const ICON: Record<string, string> = { "pasuje": "✅", "częściowo": "🟨", "różni się": "❌", "brak danych": "❔" };
 const STRENGTH: Record<string, string> = { silna: "bad", "średnia": "warn", słaba: "neutral" };
 
 function Feature({ label, f }: { label: string; f: Row | null | undefined }) {
@@ -121,21 +120,21 @@ export function AnalysisView() {
 
           <div className="panel">
             <div className="row between"><h3>Podobne przypadki ({result.similar.length} z {result.n_candidates})</h3>
-              <span className="small muted">Wynik = suma punktów za cechy, które da się porównać; cechy bez danych nie obniżają wyniku.</span></div>
+              <span className="small muted">Każda cecha waży tyle samo; „częściowo” liczy się jako pół. Cechy bez danych nie są liczone. Najpierw przypadki z tym samym podsektorem głównym.</span></div>
             {result.similar.map((s: Row) => (
               <details key={s.project_id} className="event">
                 <summary>
-                  <span className="date" style={{ minWidth: 56 }}><b>{num(s.score, 0)}</b>/100</span>
+                  <span className="date" style={{ minWidth: 150 }} title={`${s.score}% porównywalnych cech`}>
+                    pasuje <b>{s.matched} z {s.checked}</b>{s.partial ? ` (+${s.partial} częściowo)` : ""}</span>
                   <span style={{ flex: 1, minWidth: 0 }}><a href={`#baza/${s.project_id}`} onClick={(e) => e.stopPropagation()}>{s.project_id}</a> · {s.name}</span>
                   <span className="small muted">wzrost {s.growth_pct != null ? `${num(s.growth_pct)}%` : "—"} · opóźn. {s.delay_days != null ? `${s.delay_days} dni` : "—"}</span>
                   <LinkChip status={s.link_status} />
                 </summary>
                 <div className="body">
                   <div className="scroll"><table>
-                    <thead><tr><th></th><th>Cecha</th><th>Ocena</th><th>Szczegóły</th><th className="num">Pkt</th></tr></thead>
+                    <thead><tr><th></th><th>Cecha</th><th>Ocena</th><th>Szczegóły</th></tr></thead>
                     <tbody>{s.features.map((x: Row) => (
-                      <tr key={x.name}><td>{ICON[x.status] ?? ""}</td><td>{x.name}</td><td>{x.status}</td><td className="small">{x.detail}</td>
-                        <td className="num">{x.status === "brak danych" ? "—" : `${num(x.points)}/${x.max}`}</td></tr>))}</tbody>
+                      <tr key={x.name}><td>{STATUS_ICON[x.status] ?? ""}</td><td>{x.name}</td><td>{x.status}</td><td className="small">{x.detail}</td></tr>))}</tbody>
                   </table></div>
                   <div className="kpis">
                     <div className="kpi"><span className="l">Wartość umów</span><span className="v">{mln(s.contract_value)}</span></div>
@@ -151,7 +150,9 @@ export function AnalysisView() {
 
           {cmp ? (
             <div className="panel">
-              <h3>Koszty i terminy w podobnych przypadkach</h3>
+              <div className="row between"><h3>Koszty i terminy w podobnych przypadkach</h3>
+                {cmp.confidence ? <span className="row"><span className="small muted">pewność prognozy:</span><ConfidenceChip level={cmp.confidence.level} /></span> : null}</div>
+              {cmp.confidence ? <p className="small muted">{cmp.confidence.basis}</p> : null}
               <div className="kpis">
                 <Stat label="Wzrost wypłaty vs wartość umowy" st={cmp.growth_pct} unit="%" />
                 <Stat label="Opóźnienie vs termin pierwotny" st={cmp.delay_days} unit="dni" fmt={(v) => num(v, 0)} />

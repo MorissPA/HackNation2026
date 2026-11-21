@@ -10,7 +10,7 @@ Wymagania: Python 3.9+ i Node.js 18+.
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 cd web && npm install
-npm run dev        # API (FastAPI) na :8000 + interfejs (Vite) na http://localhost:5173
+npm run dev        # API (FastAPI) na :8080 + interfejs (Vite) na http://localhost:5173
 ```
 
 W interfejsie kliknij **Importuj paczkę organizatora** (plik `../Risk_Miner_dane_projekty.xlsx`), a potem **Pobierz z BZP wszystkie rekordy**.
@@ -72,20 +72,25 @@ Oficjalne API jest zapasem: używamy go, gdy kopia nie odpowiada albo nie znajdu
 3. Treść każdego ogłoszenia pobiera `GET /notice?NoticeType&PublicationDateFrom/To&NoticeNumber`. Okno dat wynosi ±1 dzień, bo API inaczej gubi ogłoszenia z wczesnych godzin. Pełny HTML zapisujemy w bazie, dzięki czemu dowód da się otworzyć w aplikacji.
 4. **Ogłoszenie z arkusza niedostępne w API** (np. Wolin, `2023/BZP 00110672/01`). Szukamy ogłoszeń zamawiającego (zgodny NIP) po fragmentach nazwy przedsięwzięcia i sprawdzamy, które w treści cytują numer z arkusza. OCID bierzemy z takiego ogłoszenia. Metoda powiązania to `odwołanie_w_ogłoszeniu`, cytat trafia do dowodu, a w brakach pojawia się informacja o niedostępnym ogłoszeniu bazowym.
 5. **Bez ogłoszenia o wyniku** umowy budujemy z ogłoszeń o wykonaniu, po jednej na część. Numer części odczytujemy z nazwy zamówienia („Umowa dla części nr 2”). Termin podany jako czas trwania („5 miesiące”) przeliczamy od daty zawarcia umowy i zapisujemy jako obliczenie z formułą.
-6. **Rekordy KPO (bez numeru BZP)**, np. Modlikowice. Kandydatów szukamy w BZP po NIP zamawiającego (`OrganizationNationalId`) od roku poprzedzającego nabór KPO. Frazy wyszukiwania to rdzenie nazw miejscowości i słowa kluczowe podsektora. Ogłoszenia grupujemy po OCID i oceniamy jawnie w skali 0–100 ([riskminer/matcher.py](riskminer/matcher.py)):
+6. **Rekordy KPO (bez numeru BZP)**, np. Modlikowice. Zgodnie z treścią zadania, gdy nie ma wspólnego identyfikatora, dopasowujemy po **nazwie, zamawiającym, miejscu, CPV, wartości i datach** i pokazujemy podstawę oraz poziom pewności ([riskminer/matcher.py](riskminer/matcher.py)).
+   - **Zamawiający (NIP)** to warunek konieczny: kandydatów szukamy tylko wśród ogłoszeń tego NIP-u, od roku poprzedzającego nabór KPO.
+   - Pozostałe kryteria są oceniane jako *pasuje*, *nie pasuje* albo *brak danych*:
 
-   | Cecha | Punkty |
-   |---|---|
-   | miejscowości z nazwy przedsięwzięcia w tytule | do 35 |
-   | podsektor (kanalizacja, wodociąg, oczyszczalnia, SUW) | do 25 |
-   | podobieństwo nazwy (rdzenie słów) | do 20 |
-   | roboty budowlane | 10 |
-   | postępowanie wyłącznie na dokumentację projektową | −30 |
-   | kompletność ogłoszeń (zamówienie, wynik, wykonanie) | do 5 |
-   | wartość umów w przedziale 30–125% wartości przedsięwzięcia KPO | 5 |
-   | wartość umów poza tym przedziałem | −15 |
+     | Kryterium | Kiedy pasuje |
+     |---|---|
+     | nazwa | co najmniej połowa słów nazwy przedsięwzięcia jest w tytule zamówienia, a zamówienie dotyczy robót, nie samej dokumentacji |
+     | miejsce | miejscowość z nazwy przedsięwzięcia jest w tytule |
+     | CPV | postępowanie ma kod robót z zakresu przedsięwzięcia (np. 452324 kanalizacja, 4523215 wodociąg, 452521 oczyszczalnia) |
+     | wartość | umowy mają 30–125% wartości przedsięwzięcia KPO |
+     | daty | pierwsze ogłoszenie przypada na okres naboru KPO |
 
-   Gdy najlepszy kandydat ma co najmniej 60 pkt i 15 pkt przewagi nad drugim, powiązanie dostaje status **proponowane**, a karta liczy się od razu. W przeciwnym razie system nie tworzy powiązania i ekspert wybiera kandydata w panelu **Weryfikacja eksperta → Powiązania z BZP**. Ekspert może potwierdzić propozycję, wybrać innego kandydata albo ją odrzucić. Odrzucony OCID jest pomijany w kolejnych rankingach, każda decyzja trafia do `expert_decision`, a przypadek przelicza się automatycznie.
+   - **Poziom pewności:**
+     - wysoka: wszystkie sprawdzalne kryteria spełnione (co najmniej 5),
+     - średnia: najwyżej jedno niespełnione,
+     - niska: pozostałe.
+   - **Propozycja automatyczna** (status *proponowane*) powstaje tylko wtedy, gdy dokładnie jeden kandydat ma pewność wysoką. Gdy kilku spełnia wszystko, wybieramy ten, którego tytuł zawiera najwięcej słów z nazwy przedsięwzięcia, o ile jest jeden taki, i piszemy to w uzasadnieniu. W każdym innym przypadku kandydata wybiera ekspert.
+   - Ekspert może potwierdzić propozycję, wybrać innego kandydata albo ją odrzucić. Odrzucony OCID jest pomijany w kolejnych rankingach, a każda decyzja trafia do `expert_decision`.
+   - Na 7 rekordach KPO z paczki nowe reguły wskazały te same postępowania co wcześniejsza wersja z punktami (7/7). W 3 przypadkach (Grodzisko Dolne, Kleszczewo, Zduny) rozstrzygnęła reguła remisu.
 7. **Części zamówienia.** Ogłoszenie o wyniku ma sekcje „Część N”. Rekord ze `Zakres rekordu = część 2` dostaje tylko umowę z części 2. Ogłoszenia o wykonaniu i o zmianie nie podają numeru części, więc przypisujemy je do umowy po wartości, dacie zawarcia i NIP wykonawcy.
 
 ## Analiza nowego projektu
@@ -96,22 +101,17 @@ Oficjalne API jest zapasem: używamy go, gdy kopia nie odpowiada albo nie znajdu
    - skala (km, RLM, m³/d, przyłącza), budżet, termin,
    - znane ograniczenia (odbiornik ścieków i pozwolenie wodnoprawne, grunty prywatne, kolizje, przekroczenia, obiekt w eksploatacji, azbest, warunki gruntowe).
 2. **Profile przypadków z bazy.** Opis przedmiotu z ogłoszenia o zamówieniu (albo opis KPO), wartości umów, wypłaty, terminy, opóźnienia i ryzyka. Ryzyka zatwierdzone przez eksperta ważą 1, propozycje 0,5, odrzucone są pomijane.
-3. **Ranking podobieństwa**, w punktach:
-
-   | Cecha | Punkty |
-   |---|---|
-   | podsektor | 35 |
-   | podsektory dodatkowe | 5 |
-   | rodzaj prac | 10 |
-   | formuła | 15 |
-   | budżet względem wartości umów | 10 |
-   | długość sieci | 5 |
-   | podobieństwo opisu | 20 |
-   | ograniczenia | 5 |
-
-   Wynik to suma punktów za cechy, które da się porównać. Przy każdym przypadku widać, co pasuje, co się różni i czego brakuje.
+3. **Ranking podobieństwa** (treść zadania: łączyć dane strukturalne z treścią opisów i wyjaśniać, które cechy przesądziły o podobieństwie):
+   - porównywane cechy: podsektor główny i dodatkowe, rodzaj prac, formuła, budżet względem wartości umów, długość sieci, treść opisu (wspólne rdzenie słów), znane ograniczenia,
+   - każda cecha waży tyle samo; *pasuje* = 1, *częściowo* = ½, cechy bez danych nie są liczone,
+   - wynik ma postać „pasuje 5 z 7”,
+   - kolejność: najpierw ten sam podsektor główny, potem odsetek pasujących cech, a przy remisie podobieństwo treści.
 4. **Raport:**
    - wzrost wypłaty, opóźnienie i okres realizacji z liczebnością próby; przy n ≥ 3 mediana i zakres, przy mniejszej próbie wartości per przypadek z informacją, czego brakuje,
+   - poziom pewności prognozy:
+     - wysoka: n ≥ 5 i wszystkie przypadki z tego samego podsektora,
+     - średnia: n ≥ 3 i co najmniej 2 z tego samego podsektora,
+     - niska: pozostałe,
    - flagi R01–R15 z siłą sygnału, podstawą i dowodami, a do każdej działanie i zapis do sprawdzenia w SWZ lub umowie,
    - dla sieci wodociągowych checklista 9 pytań z poradnika organizatora.
 5. **Eksport** do CSV (separator `;`, z BOM dla Excela) i JSON.

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type Risk, type Row } from "./api";
 import { CandidateList } from "./ProjectCard";
-import { DecisionChip, ErrorBox, Evidence, LinkChip, Spinner, Tabs } from "./ui";
+import { ConfidenceChip, DecisionChip, ErrorBox, Evidence, LinkChip, Spinner, Tabs } from "./ui";
 
 const STATUSES = ["do_weryfikacji", "zaakceptowane", "poprawione", "odrzucone"] as const;
 
@@ -101,14 +101,16 @@ function KpoLinks({ onChanged }: { onChanged: () => void }) {
   if (!rows) return <Spinner />;
   return (
     <>
-      <p className="muted">Rekordy KPO nie mają numeru ogłoszenia. System proponuje postępowanie z BZP na podstawie NIP zamawiającego, miejscowości, podsektora, nazwy, rodzaju zamówienia i skali. Ekspert potwierdza propozycję, wybiera innego kandydata albo ją odrzuca – przypadek przelicza się automatycznie.</p>
+      <p className="muted">Rekordy KPO nie mają numeru ogłoszenia BZP. Kandydatów szukamy wśród ogłoszeń zamawiającego o tym samym NIP i sprawdzamy kryteria z treści zadania: nazwa, miejsce, CPV, wartość, daty. Propozycja automatyczna powstaje tylko wtedy, gdy jeden kandydat spełnia wszystkie sprawdzalne kryteria (przy remisie – ten z największą liczbą słów z nazwy przedsięwzięcia w tytule). Ekspert potwierdza, wybiera innego kandydata albo odrzuca – przypadek przelicza się automatycznie.</p>
       <div className="panel scroll">
         <table>
-          <thead><tr><th>ID</th><th>Przedsięwzięcie</th><th>Numer KPO</th><th>Status</th><th className="num">Wynik</th></tr></thead>
+          <thead><tr><th>ID</th><th>Przedsięwzięcie</th><th>Numer KPO</th><th>Status</th><th>Dopasowanie</th></tr></thead>
           <tbody>{rows.map((r) => (
             <tr key={r.project_id} className={`click ${sel === r.project_id ? "sel" : ""}`} onClick={() => setSel(r.project_id)}>
               <td className="mono small">{r.project_id}</td><td>{r.name}</td><td className="mono small">{r.public_id}</td>
-              <td><LinkChip status={r.status} /></td><td className="num">{r.score != null ? Math.round(r.score * 100) : ""}</td></tr>))}</tbody>
+              <td><LinkChip status={r.status} /></td>
+              <td>{(() => { const c = r.candidates.find((x: Row) => x.ocid === r.ocid); return c ? <span className="row" style={{ gap: 4 }}>
+                <span className="small">{c.matched}/{c.checked}</span><ConfidenceChip level={c.confidence} /></span> : null; })()}</td></tr>))}</tbody>
         </table>
       </div>
       {cur ? (
@@ -120,7 +122,7 @@ function KpoLinks({ onChanged }: { onChanged: () => void }) {
               <div className="row">
                 <label htmlFor="link-choice" className="small muted">Postępowanie</label>
                 <select id="link-choice" value={choice} onChange={(e) => setChoice(e.target.value)} style={{ maxWidth: 520 }}>
-                  {cur.candidates.map((c: Row) => <option key={c.ocid} value={c.ocid}>{c.rank}. {Math.round(c.score)}/100 · {String(c.title).slice(0, 90)}</option>)}
+                  {cur.candidates.map((c: Row) => <option key={c.ocid} value={c.ocid}>{c.rank}. {c.matched}/{c.checked} kryteriów · pewność {c.confidence} · {String(c.title).slice(0, 80)}</option>)}
                 </select>
               </div>
               <div className="row">

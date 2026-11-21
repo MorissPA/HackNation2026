@@ -1,27 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type Card, type Candidate, type Row } from "./api";
-import { ErrorBox, Evidence, KindChip, LinkChip, DecisionChip, Spinner, Tabs, factValue, mln, num, pln } from "./ui";
+import { ConfidenceChip, ErrorBox, Evidence, KindChip, LinkChip, DecisionChip, STATUS_ICON, Spinner, Tabs, factValue, mln, num, pln } from "./ui";
 
 type Tab = "timeline" | "facts" | "changes" | "sources";
 
 export function CandidateList({ candidates, open = false }: { candidates: Candidate[]; open?: boolean }) {
   if (!candidates.length) return null;
-  const icon: Record<string, string> = { "pasuje": "✅", "częściowo": "🟨", "różni się": "❌", "brak danych": "❔" };
   return (
     <details open={open}>
       <summary className="small" style={{ color: "var(--accent)" }}>Kandydaci dopasowania KPO → BZP ({candidates.length})</summary>
       <div style={{ display: "grid", gap: 12, marginTop: 8 }}>
         {candidates.map((c) => (
           <div key={c.ocid} style={{ display: "grid", gap: 4 }}>
-            <div><b>{c.rank}. {c.score.toFixed(0)}/100</b> · {c.title}</div>
+            <div className="row"><b>{c.rank}.</b> {c.matched != null ? <b>{c.matched}/{c.checked} kryteriów</b> : null}
+              <ConfidenceChip level={c.confidence} /> <span>{c.title}</span></div>
             <div className="small muted mono">{c.ocid} · ogłoszenie bazowe {c.base_notice}</div>
             <div className="scroll">
               <table>
-                <thead><tr><th></th><th>Cecha</th><th>Ocena</th><th>Szczegóły</th><th className="num">Pkt</th></tr></thead>
+                <thead><tr><th></th><th>Kryterium</th><th>Ocena</th><th>Podstawa</th></tr></thead>
                 <tbody>
                   {c.features.map((f) => (
-                    <tr key={f.name}><td>{icon[f.status] ?? ""}</td><td>{f.name}</td><td>{f.status}</td>
-                      <td className="small">{f.detail}</td><td className="num">{f.points > 0 ? `+${f.points}` : f.points}</td></tr>
+                    <tr key={f.name}><td>{STATUS_ICON[f.status] ?? ""}</td><td>{f.name}</td><td>{f.status}</td>
+                      <td className="small">{f.detail}</td></tr>
                   ))}
                 </tbody>
               </table>

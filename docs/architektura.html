@@ -182,7 +182,7 @@ svg .note { fill: var(--accent-soft); stroke: var(--muted); stroke-width: 1; }
     <ul class="notes">
       <li>① <b>Numer BZP z arkusza</b>, np. Steklin <code>2024/BZP 00349631/01</code>. Wyszukiwarka zwraca OCID wprost.</li>
       <li>② <b>Odwołanie w innym ogłoszeniu</b>, np. Wolin. API nie zwraca ogłoszenia o tym numerze, ale cytuje je zmiana ogłoszenia tego samego zamawiającego.</li>
-      <li>③ <b>Ranking KPO</b>, np. Modlikowice. Kandydaci są szukani po NIP i frazach, a ocena uwzględnia miejscowość, podsektor, nazwę, rodzaj zamówienia i skalę. Wynik trafia do eksperta jako propozycja.</li>
+      <li>③ <b>Dopasowanie KPO</b>, np. Modlikowice. NIP zamawiającego jest warunkiem koniecznym, a kryteria z treści zadania to nazwa, miejsce, CPV, wartość i daty. Każde jest spełnione, niespełnione albo bez danych, a poziom pewności wynika z liczby spełnionych. Wynik trafia do eksperta jako propozycja.</li>
     </ul>
   </section>
 
@@ -253,9 +253,9 @@ svg .note { fill: var(--accent-soft); stroke: var(--muted); stroke-width: 1; }
           <line x1="20" y1="46" x2="250" y2="46" class="edge"/>
           <text x="28" y="62" class="m">ocid: String</text>
           <text x="28" y="78" class="m">rank: Integer</text>
-          <text x="28" y="94" class="m">score: 0..100</text>
+          <text x="28" y="94" class="m">confidence: wysoka|średnia|niska</text>
           <text x="28" y="110" class="m">title: String</text>
-          <text x="28" y="126" class="m">features: Cecha [1..*]</text>
+          <text x="28" y="126" class="m">criteria: Kryterium [6]</text>
 
           <!-- Project -->
           <rect x="300" y="20" width="260" height="150" class="key"/>
@@ -533,11 +533,11 @@ svg .note { fill: var(--accent-soft); stroke: var(--muted); stroke-width: 1; }
           <line x1="57" y1="222" x2="398" y2="222" class="edge" marker-end="url(#f4a)"/>
           <text x="225" y="214" text-anchor="middle" class="lbl halo">[numer BZP lub odwołanie]</text>
           <line x1="54" y1="216" x2="128" y2="98" class="edge" marker-end="url(#f4a)"/>
-          <text x="122" y="140" class="lbl halo">[KPO: wynik ≥ 60</text>
-          <text x="122" y="154" class="lbl halo">i przewaga ≥ 15]</text>
+          <text x="122" y="140" class="lbl halo">[KPO: jeden kandydat</text>
+          <text x="122" y="154" class="lbl halo">z pewnością wysoką]</text>
           <line x1="54" y1="228" x2="128" y2="336" class="edge" marker-end="url(#f4a)"/>
-          <text x="122" y="290" class="lbl halo">[KPO: brak</text>
-          <text x="122" y="304" class="lbl halo">jednoznacznego]</text>
+          <text x="122" y="290" class="lbl halo">[KPO: brak lub kilku</text>
+          <text x="122" y="304" class="lbl halo">równorzędnych]</text>
           <line x1="280" y1="104" x2="398" y2="204" class="edge" marker-end="url(#f4a)"/>
           <text x="346" y="148" class="lbl halo">potwierdź</text>
           <line x1="280" y1="86" x2="398" y2="86" class="edge" marker-end="url(#f4a)"/>
