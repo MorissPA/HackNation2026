@@ -78,14 +78,15 @@ export const api = {
     method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) }),
   analyzeRisks: (id: string) =>
     post<{sources: number; created: number; cached: number; abstained: number}>(`/api/projects/${encodeURIComponent(id)}/llm`),
-  analyze: (text: string, choices?: Record<string, number>) => post<Row>("/api/analysis", { text, choices }),
+  analyze: (text: string, choices?: Record<string, number>, useLlm = false) =>
+    post<Row>("/api/analysis", { text, choices, use_llm: useLlm }),
   analyzeFile: (file: File) => {
     const fd = new FormData(); fd.append("file", file);
     return call<Row>("/api/analysis/file", { method: "POST", body: fd });
   },
-  exportAnalysis: async (text: string, format: "csv" | "json", choices?: Record<string, number>) => {
+  exportAnalysis: async (text: string, format: "csv" | "json", choices?: Record<string, number>, useLlm = false) => {
     const res = await fetch(`/api/analysis/export?format=${format}`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, choices }) });
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, choices, use_llm: useLlm }) });
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
     return res.blob();
   },

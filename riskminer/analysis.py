@@ -7,6 +7,7 @@ Zasady (z materiału eksperckiego organizatora):
 - wiedza zatwierdzona przez eksperta (zaakceptowane/poprawione ryzyka) waży więcej niż propozycje,
   a odrzucone propozycje nie są brane pod uwagę.
 """
+import html
 import io
 import json
 import re
@@ -20,9 +21,9 @@ from .bzp import parser as P
 # ---------------------------------------------------------------- taksonomia organizatora (podsektory)
 SUBSECTORS = [
     ("Oczyszczalnia ścieków", r"oczyszczal\w*\s+ście|oczyszczalni|\bRLM\b|osad\w* czynn|złoż\w* biologiczn|reaktor\w* biologiczn"),
-    ("Kanalizacja sanitarna", r"kanalizac\w*\s+sanitarn|kanalizacj\w*\b(?!\s+deszcz)|przepompowni\w* ście|kanał\w* (sanitarn|grawitacyjn|tłoczn)|przewod\w* tłoczn|tłoczn\w* kanaliz"),
+    ("Kanalizacja sanitarna", r"kanalizac\w*\s+sanitarn|kanalizacj\w*\b(?!\s+deszcz)|(?:prze)?pompowni\w*|kanał\w* (sanitarn|grawitacyjn|tłoczn)|przewod\w* tłoczn|tłoczn\w* kanaliz"),
     ("Sieć wodociągowa", r"sie(ć|ci)\s+wodociąg|wodociąg|przyłącz\w* wod|magistral\w* wod"),
-    ("Uzdatnianie i zaopatrzenie w wodę", r"uzdatniani\w* wody|\bSUW\b|stacj\w* uzdatniania|ujęci\w* wody|studni\w* głębin|zbiornik\w* wody czystej|hydrofor"),
+    ("Uzdatnianie i zaopatrzenie w wodę", r"uzdatnian\w* wod\w*|\bfiltr(?:y|ów|a|ach)?\b|złoż\w* filtracyjn|odżelazi|odmanganiani|\bSUW\b|stacj\w* uzdatniania|ujęci\w* wody|studni\w* głębin|zbiornik\w* wody czystej|hydrofor"),
     ("Kanalizacja deszczowa i retencja", r"kanalizac\w*\s+deszcz|wód opadowych|retencj|odwodnieni|zbiornik\w* retencyjn"),
 ]
 CONSTRAINTS = [
@@ -33,7 +34,7 @@ CONSTRAINTS = [
     ("przekroczenia: droga, kolej, ciek", r"przejści\w* (pod|przez)|przewiert|przecisk|drog\w* (krajow|wojewódzk|powiatow)|lini\w* kolejow|kolej"),
     ("istniejący obiekt w eksploatacji", r"ciągłoś\w* pracy|istniejąc\w* oczyszczal|w trakcie eksploatacji|bez przerw\w* w dostawie|rozbiórk\w* istniejąc"),
     ("azbest / stan istniejących sieci", r"azbest|cementowo-azbestow|inspekcj\w* TV|stan techniczn"),
-    ("warunki gruntowo-wodne", r"geotechn|grunt\w* (słab|nienośn|organiczn)|wod\w* gruntow|odwodnieni\w* wykop"),
+    ("warunki gruntowo-wodne", r"geotechn|grunt\w* (słab|nienośn|organiczn)|w[oó]d\w* gruntow|odwodnieni\w* wykop|podtopie"),
 ]
 DESIGN_BUILD = r"zaprojektuj\s+i\s+(wy)?buduj|projektuj\s+i\s+buduj|PFU|program\w* funkcjonalno"
 WORK_NEW = r"\bbudow\w*|\brozbudow\w*|nowo\s*projektowan"
@@ -67,7 +68,20 @@ ACTIONS = {
     "R15": ("Zdefiniować wymagany efekt (parametry ścieków/wody) i sposób jego potwierdzenia.",
             "W umowie: osiągnięcie efektu ekologicznego potwierdzone badaniami jako warunek odbioru."),
 }
+# Okoliczności, które rozpoznaje model językowy (trudne do uchwycenia regułą) → ryzyko z katalogu.
+MODEL_CONSTRAINTS = {
+    "niepełny lub niespójny zakres": "R01",
+    "nieustalony operator / podział odpowiedzialności": "R05",
+    "nierealny harmonogram / zależność od innej inwestycji": "R06",
+    "wynagrodzenie ryczałtowe przy niepewnym zakresie": "R08",
+    "ogólnikowe wymagania techniczne": "R09",
+    "brak procedur prób, rozruchu i odbioru": "R10",
+    "zawężające warunki udziału lub wskazanie marki": "R11",
+    "długi czas dostaw / dostępność urządzeń": "R12",
+    "niepewne finansowanie": "R13",
+}
 CONSTRAINT_RISK = {
+    **MODEL_CONSTRAINTS,
     "pozwolenie wodnoprawne / odbiornik ścieków": "R04", "decyzja środowiskowa / ochrona przyrody": "R04",
     "grunty prywatne / dostęp do terenu": "R03", "kolizje i istniejące uzbrojenie": "R03",
     "przekroczenia: droga, kolej, ciek": "R04", "istniejący obiekt w eksploatacji": "R06",
@@ -114,12 +128,24 @@ def clean_pdf_text(text: str) -> str:
     return re.sub(r"(\d)[ \t\xa0]*\n\s*(?=(?:RLM|zł|PLN|mln|tys\.?|km|m3|m³)\b)", r"\1 ", text, flags=re.I)
 
 
+def _broken_pdf_text(text: str) -> bool:
+    lines = [line for line in text.split("\n") if line.strip()]
+    return len(lines) > 20 and sum(len(line.split()) <= 1 for line in lines) / len(lines) > 0.6
+
+
 def text_from_file(filename: str, content: bytes) -> str:
     name = filename.lower()
     if name.endswith(".pdf"):
         from pypdf import PdfReader
         reader = PdfReader(io.BytesIO(content))
-        text = clean_pdf_text("\n".join((page.extract_text() or "") for page in reader.pages))
+        text = "\n".join((page.extract_text() or "") for page in reader.pages)
+        if _broken_pdf_text(text):
+            # PDF z Google Docs / Worda: pypdf zwraca jedno słowo na wiersz („URZĄD\n \nGMINY”) – tryb układu
+            # odtwarza wiersze; wielokrotne spacje (wyrównanie kolumn) zastępujemy jedną.
+            text = "\n".join(re.sub(r"[ \t]{2,}", " ", page.extract_text(extraction_mode="layout") or "")
+                             for page in reader.pages)
+            text = "\n".join(line.strip() for line in text.split("\n"))
+        text = clean_pdf_text(text)
         if not text.strip():
             raise ValueError("PDF nie ma warstwy tekstowej (skan) – OCR nie jest obsługiwany. Wklej opis jako tekst.")
         return text
@@ -127,7 +153,8 @@ def text_from_file(filename: str, content: bytes) -> str:
         xml = zipfile.ZipFile(io.BytesIO(content)).read("word/document.xml").decode("utf-8")
         paras = []
         for p in re.findall(r"<w:p[ >].*?</w:p>", xml, re.S):
-            t = "".join(re.findall(r"<w:t[^>]*>([^<]*)</w:t>", p))
+            p = re.sub(r"<w:(?:tab|br|cr)\b[^>]*/>", "<w:t> </w:t>", p)
+            t = html.unescape("".join(re.findall(r"<w:t(?:\s[^>]*)?>([^<]*)</w:t>", p)))
             if t.strip():
                 paras.append(t)
         return "\n".join(paras)
@@ -156,9 +183,20 @@ AMOUNT = (r"(?P<amount>" + NUMBER + r")"
           r"(?:\s*(?P<currency>(?:" + PLN + "|" + FOREIGN + r")(?!\w)|[€$£¥]))?"
           r"(?:\s+(?P<tax>netto|brutto)\b)?")
 BUDGET = re.compile(
-    r"\b(?:budżet(?:u)?|(?:całkowit\w*\s+)?(?:koszt|wartość)(?:\s+całkowit\w*)?)"
-    r"(?:\s+(?:inwestycji|projektu|przedsięwzięcia|zadania|budowy|brutto|netto|szacunkowy|wynosi|to|około|ok\.?))*"
+    r"\b(?P<head>(?:budżet\w*|kwot\w*|wynagrodzeni\w*|(?:całkowit\w*\s+)?(?:koszt\w*|wartoś\w*)(?:\s+całkowit\w*)?)"
+    # do 7 słów między słowem kluczowym a kwotą: „Koszt robót dodatkowych ustala się na kwotę: 151 481,54 zł”
+    r"(?:(?:[ \t\xa0]*\n[ \t\xa0]*|[ \t\xa0]+)(?:ok\.|[^\s.;!?:,\d()]+)){0,7}?)"
     r"\s*[:=–-]?\s*(?:od\s+)?" + AMOUNT, re.I)
+# Kwoty, które nie są budżetem inwestycji (dofinansowanie, kary, zabezpieczenia…).
+NOT_BUDGET = re.compile(r"dofinansow|dotacj|wkład|dopłat|kar[ayę]?\b|kar\s|wadi|zabezpiecz|zaliczk|pożyczk|kredyt|odsetk"
+                        r"|podatk|vat\b|limit|próg|progu|ogłoszon|unijn", re.I)
+# Kwoty zmian umowy: koszt robót dodatkowych / zamiennych, zwiększenie wynagrodzenia, aneks.
+EXTRA_COST = re.compile(r"dodatkow|zamienn|uzupełniając|nieprzewidzian|zwiększ|zmian|aneks", re.I)
+DATE = r"(?P<{0}>\d{{1,2}})[./-](?P<{1}>\d{{1,2}})[./-](?P<{2}>\d{{4}})"
+OLD_DEADLINE = re.compile(r"\b(?:dotychczasow\w*|pierwotn\w*|obecn\w*|umown\w*)\s+termin\w*[^\n.:]{0,80}?[:–-]?\s*"
+                          + DATE.format("d", "m", "y"), re.I)
+NEW_DEADLINE = re.compile(r"\b(?:now\w*|zmienion\w*|wydłużon\w*)\s+termin\w*[^\n.:]{0,80}?[:–-]?\s*"
+                          + DATE.format("d", "m", "y"), re.I)
 ALTERNATIVE = re.compile(r"\s*(?:lub\b|albo\b|bądź\b|do\b|[–—-])\s*" + AMOUNT, re.I)
 LENGTH_UNIT = r"(?:km|mb|m)\b(?!\s*[23³²])"
 LENGTH = re.compile(
@@ -196,7 +234,7 @@ def _length_options(text):
         lengths.extend(options)
         if (re.search(r"(?:łącznie|razem|ogółem|(?:łączn\w*|całkowit\w*)\s+długoś\w*)"
                       r"(?:\s+(?:sieci|wynosi|to|około))*\s*[:=]?\s*$", before, re.I)
-                or re.match(r"\s*,?\s*w tym\b", text[m.end():], re.I)):
+                or re.match(r"\s*,?\s*w tym\b[^.\n]{0,40}?\d", text[m.end():], re.I)):  # „5 km, w tym 3 km…”
             totals.extend(options)
     return totals or lengths
 
@@ -204,6 +242,12 @@ def _length_options(text):
 def _budget_options(text):
     options, foreign = [], []
     for first in BUDGET.finditer(text):
+        # słowa kluczowe plus 3 słowa przed nimi w tym samym zdaniu („Zwiększenie wynagrodzenia o kwotę…”)
+        before = re.split(r"[.;!?\n]", text[max(0, first.start() - 40):first.start()])[-1].split()[-3:]
+        head = " ".join(before + [first["head"]])
+        if NOT_BUDGET.search(head):
+            continue
+        kind = "extra" if EXTRA_COST.search(head) else "budget"
         amounts = [first]
         while following := ALTERNATIVE.match(text, amounts[-1].end()):
             amounts.append(following)
@@ -225,13 +269,100 @@ def _budget_options(text):
                 tax = m["tax"].lower()
             unit = m["unit"] or (shared_unit if not m["currency"] else "")
             factor = 1e6 if unit.lower().startswith(("mln", "milion")) else 1000 if unit else 1
-            option = {"value": round(_num(m["amount"]) * factor, 2),
-                      "source": text[first.start():m.end()] if i else first.group()}
-            if tax == "netto":
+            option = {"value": round(_num(m["amount"]) * factor, 2), "kind": kind,
+                      "source": re.sub(r"\s+", " ", text[first.start():m.end()] if i else first.group()).strip()}
+            if tax == "netto" and kind == "budget":
                 option["note"] = "Kwota netto. Prognoza na podstawie kwot brutto wymaga podania budżetu brutto."
                 option["net"] = True
+            elif tax:
+                option["tax"] = tax
             options.append(option)
     return options, foreign
+
+
+def _target_options(text, rx):
+    """Wielkość docelowa (przepustowość, RLM): pomija stan obecny i progi z warunków udziału, gdy jest wartość docelowa."""
+    target, plain, existing = [], [], []
+    for m in re.finditer(rx, text, re.I):
+        before = text[max(0, m.start() - 90):m.start()].lower()
+        option = {"value": _num(m.group(1)), "source": _snip(text, m, 40)}
+        if re.search(r"powyżej|co najmniej|minimum|nie mniej niż|doświadczeni|zrealizował", before[-70:]):
+            continue
+        if re.search(r"docelow|zwiększ\w*[^.]{0,60}\bdo\s*$|po (rozbudowie|modernizacji)", before):
+            target.append(option)
+        elif re.search(r"obecn|istniejąc|aktualn|wynosząc\w*\s*$|dotychczas", before[-60:]):
+            existing.append(option)
+        else:
+            plain.append(option)
+    return target or plain or existing
+
+
+_MONTHS_PL = ["stycz", "lut", "mar", "kwie", "maj", "czerw", "lip", "sierp", "wrze", "paźdz", "listop", "grud"]
+_DATE_WORDS = r"(\d{1,2})\s+(" + "|".join(_MONTHS_PL) + r")\w*\s+(\d{4})"
+
+
+def _duration(text):
+    """Czas realizacji w miesiącach: liczba z kontekstem umowy; inaczej wyliczony z dat podpisania i zakończenia."""
+    best = None
+    for m in re.finditer(r"(\d+)\s*(miesi\w+|mies\.)", text, re.I):
+        before, after = text[max(0, m.start() - 90):m.start()].lower(), text[m.end():m.end() + 40].lower()
+        if re.search(r"ostatni\w*\s*$|gwarancj|rękojm|oczekiwani|dostaw|opóźnieni\w*\s*$", before[-50:]):
+            continue
+        if re.search(r"(przedłuż|wydłuż)\w*[^.]{0,60}\bo\s*(okres\s*)?$", before):
+            continue  # „przedłużenie terminu o 1 miesiąc” – to zmiana terminu, nie czas realizacji
+        score = (2 * bool(re.search(r"czas\w* trwania|termin\w* realizacji|realizacj|kontrakt|umow|zakończeni|robót|harmonogram", before))
+                 + bool(re.search(r"od (dnia )?(zawarcia|podpisania)", after)) + bool(re.search(r"\(\s*$", before)))
+        if best is None or score > best[0]:
+            best = (score, m)
+    if best:
+        return {"value": int(best[1].group(1)), "source": _snip(text, best[1], 50)}
+    sign = re.search(r"podpisani\w* umowy[^.\n]{0,20}?:?\s*" + _DATE_WORDS, text, re.I)
+    end = None
+    for end in re.finditer(r"(?:zakończeni\w*|odbi[oó]r\w* końcow\w*)[^\n]{0,80}?(?:do\s+)?" + _DATE_WORDS, text, re.I):
+        pass
+    if sign and end:
+        a = date(int(sign.group(3)), next(i for i, p in enumerate(_MONTHS_PL, 1) if sign.group(2).lower().startswith(p)), int(sign.group(1)))
+        b = date(int(end.group(3)), next(i for i, p in enumerate(_MONTHS_PL, 1) if end.group(2).lower().startswith(p)), int(end.group(1)))
+        months = round((b - a).days / 30.44)
+        if months > 0:
+            return {"value": months, "source": _snip(text, sign, 30) + " … " + _snip(text, end, 30), "assumed": True}
+    return None
+
+
+def _deadline_change(text):
+    """Zmiana terminu umowy: „Dotychczasowy termin…: 30.10.2025”, „Proponowany nowy termin…: 05.12.2025”."""
+    from datetime import date
+    old, new = OLD_DEADLINE.search(text), NEW_DEADLINE.search(text)
+    if not (old and new):
+        m = re.search(r"(?:przedłuż|wydłuż)\w*\s+termin\w*[^.]{0,80}?\bo\s+(?:okres\s+)?(\d+)\s*(miesi\w*|dni|tygodni\w*)", text, re.I)
+        if not m:
+            return None
+        n, unit = int(m.group(1)), m.group(2).lower()
+        days = n * (30 if unit.startswith("miesi") else 7 if unit.startswith("tyg") else 1)
+        return {"value": f"przedłużenie o {n} {unit} (ok. {days:+d} dni)", "days": days, "source": _snip(text, m, 30)}
+    try:
+        a, b = (date(int(m["y"]), int(m["m"]), int(m["d"])) for m in (old, new))
+    except ValueError:
+        return None
+    days = (b - a).days
+    return {"value": f"{a:%d.%m.%Y} → {b:%d.%m.%Y} ({days:+d} dni)", "days": days,
+            "source": re.sub(r"\s+", " ", old.group()) + " · " + re.sub(r"\s+", " ", new.group())}
+
+
+def _main_network(text, options, main):
+    """Długości innej sieci (np. „600 m sieci kanalizacji” przy wodociągu, zakres opcjonalny) nie są długością głównej sieci."""
+    if not main or len(options) < 2:
+        return options
+    rx = dict(SUBSECTORS)
+    keep = []
+    for o in options:
+        at = text.find(o["source"].strip("…")[:30]) if o.get("source") else -1
+        ctx = o.get("source", "") if at < 0 else text[max(0, at - 40):at + len(o["source"]) + 10]
+        other = any(re.search(r, ctx, re.I) for name, r in SUBSECTORS if name != main["value"])
+        own = re.search(rx[main["value"]], ctx, re.I)
+        if not (other and not own) and not re.search(r"opcjonaln", ctx, re.I):
+            keep.append(o)
+    return keep or options
 
 
 def _resolve(options, key, choices, conflicts):
@@ -240,7 +371,7 @@ def _resolve(options, key, choices, conflicts):
         return options[0] if options else None
     for option in options:
         if option["value"] == choices.get(key):
-            return dict(option, selected=True)
+            return dict(option, selected=True, rejected=[o for o in options if o["value"] != option["value"]])
     conflicts[key] = options
     return None
 
@@ -252,7 +383,8 @@ def extract_features(text: str, choices=None) -> dict:
     choices = choices or {}
     hits = []
     for name, rx in SUBSECTORS:
-        ms = list(re.finditer(rx, t, re.I))
+        ms = [m for m in re.finditer(rx, t, re.I)
+              if not re.search(r"kolizj\w*\s+z\s+(?:\w+\s+){0,2}$", t[max(0, m.start() - 40):m.start()], re.I)]
         if ms:
             hits.append((len(ms), ms[0].start(), name, _snip(t, ms[0])))
     hits.sort(key=lambda h: (-h[0], h[1]))
@@ -274,23 +406,38 @@ def extract_features(text: str, choices=None) -> dict:
                     if re.search(r"projekt\w* budowlan|dokumentacj\w* projektow\w* zamawiając|na podstawie projektu", t, re.I) else None)
 
     scale = {}
-    length = _resolve(_length_options(t), "length_km", choices, f["conflicts"])
+    length = _resolve(_main_network(t, _length_options(t), f["subsector_main"]), "length_km", choices, f["conflicts"])
     if length:
         scale["length_km"] = length
-    for key, rx, unit in [("rlm", r"(" + NUMBER + r")\s*RLM", "RLM"), ("flow_m3d", r"(" + NUMBER + r")\s*m\s*[3³]\s*/\s*(d|dob)", "m³/d"),
-                          ("connections", r"(\d+)\s*(przyłącz|przykanalik)", "szt."),
-                          ("buildings", r"(\d+)\s*(budynk|gospodarstw|nieruchomoś)", "szt.")]:
-        m = re.search(rx, t, re.I)
+    for key, rx, unit in [("rlm", r"(" + NUMBER + r")\s*RLM", "RLM"), ("flow_m3d", r"(" + NUMBER + r")\s*m\s*[3³]\s*/\s*(d|dob)", "m³/d")]:
+        value = _resolve(_target_options(t, rx), key, choices, f["conflicts"])
+        if value:
+            scale[key] = dict(value, unit=unit)
+    for key, rx, unit in [("connections", r"(\d+)\s*(przyłącz|przykanalik)|przyłącz\w*(?:[^.\n\d]|ok\.){0,40}?(\d+)\s*szt", "szt."),
+                          ("buildings", r"(\d+)\s*(?:\w+\s+)?(budynk|gospodarstw|nieruchomoś|dom(?:ów|y)\b)", "szt.")]:
+        ms = list(re.finditer(rx, t, re.I))
+        # stan istniejący przed planami („35 istniejących domów” zamiast „deklaruje budowę 40 domów”)
+        m = next((x for x in ms if re.search(r"istniejąc|zamieszkan", x.group(), re.I)), ms[0] if ms else None)
         if m:
-            scale[key] = {"value": _num(m.group(1)), "unit": unit, "source": _snip(t, m, 40)}
+            scale[key] = {"value": _num(next(g for g in m.groups() if g and g[0].isdigit())), "unit": unit, "source": _snip(t, m, 40)}
     f["scale"] = scale
 
-    budget_options, foreign_budgets = _budget_options(t)
+    all_amounts, foreign_budgets = _budget_options(t)
+    budget_options = [o for o in all_amounts if o["kind"] == "budget"]
     f["budget_pln"] = _resolve(budget_options, "budget_pln", choices, f["conflicts"]) if not foreign_budgets else None
+    extra, seen = [], set()
+    for o in all_amounts:
+        if o["kind"] == "extra" and o["value"] not in seen:
+            seen.add(o["value"])
+            extra.append(o)
+    f["extra_costs"] = extra
+    f["deadline_change"] = _deadline_change(t)
     if foreign_budgets:
         f["budget_note"] = "Budżet w obcej walucie. Do prognozy podaj kwotę w PLN. Źródło: " + ", ".join(foreign_budgets)
-    m = re.search(r"(\d+)\s*(miesi\w+|mies\.)", t, re.I)
-    f["duration_months"] = {"value": int(m.group(1)), "source": _snip(t, m, 50)} if m else None
+    f["duration_months"] = _duration(t)
+    m = re.search(r"wynagrodzeni\w*\s+(ryczałtow|kosztorysow)\w*|(ryczałt|kosztorys)\w*\s+wynagrodzeni", t, re.I)
+    f["remuneration"] = ({"value": "ryczałtowe" if (m.group(1) or m.group(2)).lower().startswith("rycz") else "kosztorysowe",
+                          "source": _snip(t, m, 40)} if m else None)
 
     f["constraints"] = []
     for name, rx in CONSTRAINTS:
@@ -467,8 +614,105 @@ def _sectors(features):
     return {sector["value"] for sector in sectors}
 
 
-def analyze(con, text: str, top_k: int = 5, min_score: float = 50.0, choices=None) -> dict:
+def merge_model(f, res, choices):
+    """Dokłada do cech z reguł wynik modelu (llm_extract.verify). Reguły mają pierwszeństwo; inna wartość modelu
+    nie nadpisuje reguły, tylko trafia do wyboru eksperta (konflikt)."""
+    choices = choices or {}
+    fields = res.get("fields", {})
+
+    def opt(value, item, **extra):
+        return {"value": value, "source": item["cytat"], "origin": "model", **extra}
+
+    def numeric(key, model_option, get, put):
+        current = get()
+        if key in f["conflicts"]:
+            if all(abs(o["value"] - model_option["value"]) > 1e-6 for o in f["conflicts"][key]):
+                f["conflicts"][key].append(model_option)
+            for o in f["conflicts"][key]:
+                if abs(o["value"] - model_option["value"]) <= 1e-6:
+                    o["model_pick"] = True
+            return
+        if current is None:
+            put(model_option)
+        elif abs(current["value"] - model_option["value"]) > 0.01 * max(1.0, abs(current["value"])):
+            options = [current, dict(model_option, model_pick=True)]
+            picked = next((o for o in options if o["value"] == choices.get(key)), None)
+            if picked:
+                put(dict(picked, selected=True, rejected=[o for o in options if o is not picked]))
+            else:
+                f["conflicts"][key] = options
+                put(None)
+        else:
+            current["model_confirmed"] = True
+
+    if "budzet" in fields:
+        item = fields["budzet"]
+        o = opt(round(float(item["kwota_zl"]), 2), item)
+        if item.get("vat") == "netto":
+            o.update(net=True, note="Kwota netto. Prognoza na podstawie kwot brutto wymaga podania budżetu brutto.")
+        numeric("budget_pln", o, lambda: f.get("budget_pln"), lambda v: f.__setitem__("budget_pln", v))
+    for model_key, key, unit in (("dlugosc_sieci_km", "length_km", "km"), ("rlm", "rlm", "RLM"),
+                                 ("przepustowosc_m3d", "flow_m3d", "m³/d"), ("przylacza_szt", "connections", "szt."),
+                                 ("odbiorcy", "recipients", "os.")):
+        if model_key in fields:
+            item = fields[model_key]
+            numeric(key, opt(float(item["wartosc"]), item, unit=unit), lambda k=key: f["scale"].get(k),
+                    lambda v, k=key: f["scale"].__setitem__(k, v) if v else f["scale"].pop(k, None))
+    if "czas_realizacji_mies" in fields:
+        item = fields["czas_realizacji_mies"]
+        numeric("duration_months", opt(round(float(item["wartosc"])), item), lambda: f.get("duration_months"),
+                lambda v: f.__setitem__("duration_months", v))
+    for model_key, key in (("podsektor_glowny", "subsector_main"), ("rodzaj_prac", "work_type"), ("formula", "formula"),
+                           ("wynagrodzenie", "remuneration")):
+        if model_key not in fields:
+            continue
+        item, current = fields[model_key], f.get(key)
+        if current is None or current.get("assumed"):
+            f[key] = opt(item["wartosc"], item)
+        elif current["value"] != item["wartosc"]:
+            f.setdefault("model_notes", []).append(
+                f"{key.replace('_', ' ')}: reguły – {current['value']}, model – {item['wartosc']} („{item['cytat']}”)")
+    if "koszt_zmiany_umowy" in fields:
+        item = fields["koszt_zmiany_umowy"]
+        v = round(float(item["kwota_zl"]), 2)
+        if all(abs(o["value"] - v) > 0.01 for o in f["extra_costs"]):
+            tax = item.get("vat") if item.get("vat") in ("brutto", "netto") else None
+            f["extra_costs"].append(opt(v, item, kind="extra", **({"tax": tax} if tax else {})))
+    if "zmiana_terminu" in fields and not f.get("deadline_change"):
+        item = fields["zmiana_terminu"]
+        days = int(item.get("dni") or 0)
+        f["deadline_change"] = opt(f"{item.get('opis', '').strip()} ({days:+d} dni)" if days else item.get("opis", ""),
+                                   item, days=days)
+    have = {c["value"] for c in f["constraints"]}
+    for item in res.get("ograniczenia", []):
+        if item["kategoria"] not in have:
+            have.add(item["kategoria"])
+            f["constraints"].append(opt(item["kategoria"], item))
+    f["model_findings"] = {"inconsistencies": res.get("sprzecznosci", []), "gaps": res.get("braki", []),
+                           "rejected": res.get("rejected", [])}
+    return f
+
+
+def analyze(con, text: str, top_k: int = 5, min_score: float = 50.0, choices=None, use_llm: bool = False) -> dict:
     feats = extract_features(text, choices)
+    llm_info = None
+    if use_llm:
+        from . import llm, llm_extract  # import tutaj: llm_extract korzysta z tego modułu
+        try:
+            res = llm_extract.extract(con, text)
+            merge_model(feats, res, choices)
+            llm_info = {k: res.get(k) for k in ("model", "seconds", "cached", "truncated")}
+            llm_info["rejected"] = len(res.get("rejected", []))
+        except llm.ModelError as exc:
+            llm_info = {"error": str(exc)}
+    if choices:
+        # wybory eksperta w konfliktach uczą model na kolejnych dokumentach (llm_extract.expert_hints)
+        from . import llm_extract
+        picked = [("budget_pln", feats.get("budget_pln")), ("duration_months", feats.get("duration_months"))]
+        picked += list(feats["scale"].items())
+        for key, option in picked:
+            if option and option.get("selected") and option.get("rejected"):
+                llm_extract.record_choice(con, key, option, option["rejected"])
     sectors = _sectors(feats)
     cases = case_profiles(con) if sectors else []
     ranked = []
@@ -507,6 +751,17 @@ def analyze(con, text: str, top_k: int = 5, min_score: float = 50.0, choices=Non
         comparison["notes"].append(feats["budget_note"])
     if (feats.get("budget_pln") or {}).get("net"):
         comparison["notes"].append(feats["budget_pln"]["note"])
+    for item in (feats.get("model_findings") or {}).get("inconsistencies", []):
+        comparison["notes"].append(f"Sprzeczność w dokumencie (model): {item['opis']} – „{item['cytat']}”.")
+    for note in feats.get("model_notes", []):
+        comparison["notes"].append("Model odczytał inaczej niż reguły – " + note)
+    if feats.get("extra_costs") or feats.get("deadline_change"):
+        comparison["notes"].append(
+            "Dokument opisuje zmianę umowy w toku (np. protokół konieczności, aneks): "
+            + "; ".join([f"koszt zmiany {o['value']:,.2f}".replace(",", " ").replace(".", ",") + " zł" + (f" {o['tax']}" if o.get("tax") else "")
+                         for o in feats.get("extra_costs", [])]
+                        + ([f"przesunięcie terminu {feats['deadline_change']['value']}"] if feats.get("deadline_change") else []))
+            + ". To nie jest budżet całej inwestycji – do prognozy podaj wartość umowy lub budżet zadania.")
     if not similar:
         comparison["notes"].append("Brak porównywalnych zakończonych inwestycji z potwierdzonym powiązaniem "
                                    "i wystarczającą zgodnością cech.")
@@ -594,7 +849,7 @@ def analyze(con, text: str, top_k: int = 5, min_score: float = 50.0, choices=Non
                                                ("duration_months", "termin realizacji")) if not feats.get(key)]
     if not feats.get("scale"):
         missing_inputs.append("skala (długość sieci, RLM, przepustowość, liczba przyłączy)")
-    return {"input_text": text, "choices": choices or {}, "features": feats, "missing_inputs": missing_inputs, "similar": similar,
+    return {"input_text": text, "choices": choices or {}, "features": feats, "llm": llm_info, "missing_inputs": missing_inputs, "similar": similar,
             "n_candidates": len(ranked), "comparison": comparison, "flags": flag_list, "water_checklist": checklist}
 
 

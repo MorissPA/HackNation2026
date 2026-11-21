@@ -66,12 +66,12 @@ def _load(path):
                  offload_kqv=gpu, op_offload=None if gpu else False, verbose=False)
 
 
-def complete(messages, schema):
+def complete(messages, schema, max_tokens=512):
     # Jeden kontekst llama.cpp obsługuje jedno wywołanie naraz.
     with _lock:
         try:
             model = _load(config.LLM_MODEL_PATH)
-            answer = model.create_chat_completion(messages=messages, temperature=0, max_tokens=512,
+            answer = model.create_chat_completion(messages=messages, temperature=0, max_tokens=max_tokens,
                         response_format={"type": "json_object", "schema": schema})
         except (OSError, requests.RequestException, ImportError, RuntimeError, ValueError) as exc:
             hint = " Ustaw LLM_GPU_LAYERS=0 i uruchom aplikację ponownie." if config.LLM_GPU_LAYERS else ""

@@ -29,6 +29,9 @@ def main():
     model.add_argument("--all", action="store_true", help="wszystkie projekty z fragmentami źródłowymi")
     ev = sub.add_parser("eval-llm", help="Ocena modelu na zbiorze testowym docs/llm_zbior_testowy.csv")
     ev.add_argument("--out", default=None, help="plik .md z wynikiem (domyślnie docs/llm_ewaluacja_<model>.md)")
+    ex = sub.add_parser("eval-extract", help="Ocena odczytu cech z dokumentów (docs/ekstrakcja): reguły vs reguły + model")
+    ex.add_argument("--bez-modelu", action="store_true", help="tylko reguły (bez modelu językowego)")
+    ex.add_argument("--out", default="docs/ekstrakcja_ewaluacja.md")
     args = ap.parse_args()
     con = db.connect()
 
@@ -76,6 +79,11 @@ def main():
         out = Path(args.out or f"docs/llm_ewaluacja_{_re.sub(r'[^a-z0-9.]+', '_', config.LLM_MODEL.lower())}.md")
         out.write_text(evaluate.to_markdown(rep), encoding="utf-8")
         print({k: v for k, v in rep.items() if k != "rows"}, "| zapisano:", out)
+    elif args.cmd == "eval-extract":
+        from riskminer import evaluate_extract
+        rep = evaluate_extract.evaluate(con, use_llm=not args.bez_modelu)
+        Path(args.out).write_text(evaluate_extract.to_markdown(rep), encoding="utf-8")
+        print(rep["warianty"], "| zapisano:", args.out)
     elif args.cmd == "show":
         pid = args.id
         for t, q in [

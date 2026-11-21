@@ -26,7 +26,16 @@ const EXAMPLES: { label: string; text: string }[] = [
 type Sub = "risks" | "checklist" | "similar" | "features";
 const SCALE_LABEL: Record<string, string> = {
   length_km: "Długość sieci [km]", rlm: "Wielkość [RLM]", flow_m3d: "Przepustowość [m³/d]",
-  connections: "Przyłącza [szt.]", buildings: "Budynki / nieruchomości [szt.]",
+  connections: "Przyłącza [szt.]", buildings: "Budynki / nieruchomości [szt.]", recipients: "Odbiorcy / mieszkańcy",
+};
+const CONFLICT_LABEL: Record<string, [string, (v: number) => string]> = {
+  budget_pln: ["budżet inwestycji", (v) => pln(v)],
+  length_km: ["długość całej sieci", (v) => num(v, 3) + " km"],
+  flow_m3d: ["docelową przepustowość", (v) => num(v) + " m³/d"],
+  rlm: ["docelową wielkość", (v) => num(v) + " RLM"],
+  connections: ["liczbę przyłączy", (v) => num(v) + " szt."],
+  recipients: ["liczbę odbiorców", (v) => num(v)],
+  duration_months: ["czas realizacji", (v) => num(v) + " mies."],
 };
 const signed = (v: number, digits = 1) => `${v > 0 ? "+" : ""}${num(v, digits)}`;
 
@@ -41,7 +50,9 @@ function FeatureRow({ label, f }: { label: string; f: Row | null | undefined }) 
     <tr>
       <td className="t-sub" style={{ whiteSpace: "nowrap" }}>{label}</td>
       <td>{f ? <b>{typeof f.value === "number" ? num(f.value, 3) : f.value}</b> : <span className="st-miss">brak w opisie</span>}
-        {f?.assumed ? <span className="small muted"> (przyjęte z kontekstu)</span> : null}</td>
+        {f?.assumed ? <span className="small muted"> (przyjęte z kontekstu)</span> : null}
+        {f?.origin === "model" ? <span className="chip warn" title="Odczytane przez model językowy; cytat sprawdzony w dokumencie"> model</span> : null}
+        {f?.model_confirmed ? <span className="small muted"> (potwierdzone przez model)</span> : null}</td>
       <td className="small muted">{f?.source ?? ""}{f?.note ? <><br />{f.note}</> : null}</td>
     </tr>
   );
@@ -118,6 +129,7 @@ export function AnalysisView({ minChars }: { minChars?: number }) {
   const [busy, setBusy] = useState(false);
   const [file, setFile] = useState<string | null>(null);
   const [sub, setSub] = useState<Sub>("risks");
+  const [llmBusy, setLlmBusy] = useState(false);
 
   const run = async (fn: () => Promise<Row>) => {
     setBusy(true);
@@ -125,10 +137,12 @@ export function AnalysisView({ minChars }: { minChars?: number }) {
     catch (e) { toast((e as Error).message, true); } finally { setBusy(false); }
   };
   const exp = async (format: "csv" | "json") => {
-    try { download(await api.exportAnalysis(result?.input_text ?? text, format, result?.choices), `risk_miner_analiza.${format}`); toast(`Wyeksportowano analizę do pliku ${format.toUpperCase()}.`); }
+    try { download(await api.exportAnalysis(result?.input_text ?? text, format, result?.choices, !!result?.llm), `risk_miner_analiza.${format}`); toast(`Wyeksportowano analizę do pliku ${format.toUpperCase()}.`); }
     catch (e) { toast((e as Error).message, true); }
   };
   const f = result?.features;
+  const usedLlm = !!result?.llm && !result.llm.error;
+  const findings = f?.model_findings;
   const cmp = result?.comparison;
   const similar: Row[] = result?.similar ?? [];
   const checklist: ChkItem[] = result ? (result.water_checklist
@@ -164,7 +178,11 @@ export function AnalysisView({ minChars }: { minChars?: number }) {
               onChange={(e) => { const fl = e.target.files?.[0]; if (fl) { setFile(fl.name); run(() => api.analyzeFile(fl)); } e.target.value = ""; }} />
           </label>
           <span className="row">
-            {busy ? <><Spinner /><span className="caption">Analizuję…</span></> : null}
+            {busy ? <><Spinner /><span className="caption">{llmBusy ? "Model czyta dokument (zwykle 1–2 min)…" : "Analizuję…"}</span></> : null}
+            {result && !usedLlm ? <button className="btn" disabled={busy}
+              title="Lokalny model językowy czyta cały dokument: kontekst kwot, długości, terminów, sprzeczności i braki. Każda wartość ma cytat sprawdzony w dokumencie."
+              onClick={() => { setLlmBusy(true); run(() => api.analyze(result.input_text, result.choices, true)).finally(() => setLlmBusy(false)); }}>
+              Doczytaj szczegóły modelem</button> : null}
             <button className="btn btn-primary" disabled={busy || !minChars || Array.from(text.trim()).length < minChars} onClick={() => run(() => api.analyze(text))}>Analizuj inwestycję</button>
           </span>
         </div>
@@ -180,17 +198,33 @@ export function AnalysisView({ minChars }: { minChars?: number }) {
                 <button className="btn btn-sm" onClick={() => exp("csv")}>Eksportuj CSV</button>
               </span>
             </div>
-            {Object.entries(f.conflicts as Record<string, Row[]>).map(([key, options]) => (
-              <div className="gap" key={key}>
-                <p>Wybierz {key === "budget_pln" ? "budżet inwestycji" : "długość całej sieci"}, aby obliczyć prognozę.</p>
-                {options.map((option, index) => (
-                  <p key={index}><button className="btn btn-sm" disabled={busy}
-                    onClick={() => run(() => api.analyze(text, { ...result.choices, [key]: option.value }))}>
-                    {key === "budget_pln" ? pln(option.value) + (option.net ? " netto" : "") : num(option.value) + " km"}
-                  </button> „{option.source}”</p>
-                ))}
-              </div>
-            ))}
+            {result.llm?.error ? <div className="gap"><p>Model językowy niedostępny: {result.llm.error} Wynik oparty tylko na regułach.</p></div> : null}
+            {usedLlm ? <p className="caption">Szczegóły doczytał model {result.llm.model}{result.llm.cached ? " (wynik zapamiętany)" : ` w ${result.llm.seconds} s`}.
+              Wartości oznaczone „model” mają cytat sprawdzony w dokumencie{result.llm.rejected ? `; odrzucono ${result.llm.rejected} odpowiedzi bez pokrycia w tekście` : ""}.
+              {result.llm.truncated ? " Dokument był dłuższy niż kontekst modelu – model przeczytał jego początek." : ""}</p> : null}
+            {Object.entries(f.conflicts as Record<string, Row[]>).map(([key, options]) => {
+              const [what, fmt] = CONFLICT_LABEL[key] ?? [key, (v: number) => num(v)];
+              const groups = new Map<number, Row[]>();
+              options.forEach((o) => groups.set(o.value, [...(groups.get(o.value) ?? []), o]));
+              return (
+                <div className="gap" key={key}>
+                  <p>Dokument podaje różne wartości. Wybierz {what}, aby obliczyć prognozę.</p>
+                  {[...groups.entries()].map(([value, opts]) => (
+                    <p key={value}><button className="btn btn-sm" disabled={busy}
+                      onClick={() => run(() => api.analyze(result.input_text, { ...result.choices, [key]: value }, usedLlm))}>
+                      {fmt(value)}{opts.some((o) => o.net) ? " netto" : ""}
+                    </button>{opts.some((o) => o.model_pick) ? <span className="chip warn"> wskazanie modelu</span> : null}
+                      {" "}{opts.map((o) => `„${o.source}”`).join(" · ")}</p>
+                  ))}
+                </div>);
+            })}
+            {findings && (findings.inconsistencies.length || findings.gaps.length) ? (
+              <div className="gap">
+                {findings.inconsistencies.length ? <><p><b>Sprzeczności w dokumencie</b> (model)</p>
+                  <ul>{findings.inconsistencies.map((x: Row, i: number) => <li key={i}>{x.opis} <span className="small muted">– „{x.cytat}”</span></li>)}</ul></> : null}
+                {findings.gaps.length ? <><p><b>Braki do uzupełnienia przed przetargiem</b> (ocena modelu – sprawdź)</p>
+                  <ul>{findings.gaps.map((g: string, i: number) => <li key={i}>{g}</li>)}</ul></> : null}
+              </div>) : null}
             <div className="kpis">
               <div className="kpi">
                 <div className="kpi-l">Próba porównawcza</div>
@@ -280,8 +314,12 @@ export function AnalysisView({ minChars }: { minChars?: number }) {
                     {!Object.keys(f.scale).length ? <FeatureRow label="Skala" f={null} /> : null}
                     <FeatureRow label="Budżet" f={f.budget_pln ? { ...f.budget_pln, value: pln(f.budget_pln.value) } : null} />
                     <FeatureRow label="Termin [miesiące]" f={f.duration_months} />
+                    {(f.extra_costs ?? []).map((o: Row, i: number) => (
+                      <FeatureRow key={`x${i}`} label="Koszt zmiany umowy" f={{ ...o, value: pln(o.value) + (o.tax ? ` ${o.tax}` : "") }} />))}
+                    {f.deadline_change ? <FeatureRow label="Zmiana terminu" f={f.deadline_change} /> : null}
+                    {f.remuneration ? <FeatureRow label="Wynagrodzenie" f={f.remuneration} /> : null}
                     <tr><td className="t-sub">Znane ograniczenia</td><td colSpan={2}>{f.constraints.length
-                      ? f.constraints.map((c: Row) => <div key={c.value}><b>{c.value}</b> <span className="small muted">– {c.source}</span></div>)
+                      ? f.constraints.map((c: Row) => <div key={c.value}><b>{c.value}</b>{c.origin === "model" ? <span className="chip warn"> model</span> : null} <span className="small muted">– {c.source}</span></div>)
                       : <span className="muted">nie wskazano</span>}</td></tr>
                   </tbody></table></div>
                 </div>)}

@@ -482,20 +482,21 @@ class AnalysisRequest(BaseModel):
     text: str
     top_k: int = Field(default=5, ge=1)
     choices: dict[str, float] = Field(default_factory=dict)
+    use_llm: bool = False
 
 
-def _analyze(con, text, top_k=5, choices=None):
+def _analyze(con, text, top_k=5, choices=None, use_llm=False):
     if len((text or "").strip()) < ANALYSIS_MIN_CHARS:
         raise HTTPException(400, f"Opis musi mieć co najmniej {ANALYSIS_MIN_CHARS} znaków. Podaj zakres, podsektor i skalę inwestycji.")
     try:
-        return analysis.analyze(con, text, top_k=top_k, choices=choices)
+        return analysis.analyze(con, text, top_k=top_k, choices=choices, use_llm=use_llm)
     except ValueError as exc:  # nietypowy zapis w dokumencie nie może kończyć się błędem 500
         raise HTTPException(422, f"Nie udało się odczytać cech z opisu ({exc}). Popraw lub wklej opis jako tekst.")
 
 
 @app.post("/api/analysis")
 def run_analysis(req: AnalysisRequest, con=Depends(get_con)):
-    return _analyze(con, req.text, req.top_k, req.choices)
+    return _analyze(con, req.text, req.top_k, req.choices, req.use_llm)
 
 
 @app.post("/api/analysis/file")
@@ -511,7 +512,7 @@ async def run_analysis_file(file: UploadFile = File(...), con=Depends(get_con)):
 
 @app.post("/api/analysis/export")
 def export_analysis(req: AnalysisRequest, format: str = "csv", con=Depends(get_con)):
-    result = _analyze(con, req.text, req.top_k, req.choices)
+    result = _analyze(con, req.text, req.top_k, req.choices, req.use_llm)
     if format == "json":
         body = json.dumps(result, ensure_ascii=False, indent=2)
         return Response(body, media_type="application/json",

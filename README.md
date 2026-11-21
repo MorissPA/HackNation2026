@@ -206,7 +206,19 @@ Wynik dla Modlikowic:
    - podsektor główny i dodatkowe (taksonomia organizatora),
    - rodzaj prac, formuła realizacji,
    - skala (km, RLM, m³/d, przyłącza), budżet, termin,
-   - znane ograniczenia (odbiornik ścieków i pozwolenie wodnoprawne, grunty prywatne, kolizje, przekroczenia, obiekt w eksploatacji, azbest, warunki gruntowe).
+   - znane ograniczenia (odbiornik ścieków i pozwolenie wodnoprawne, grunty prywatne, kolizje, przekroczenia, obiekt w eksploatacji, azbest, warunki gruntowe),
+   - przy zmianie umowy (protokół konieczności, aneks): koszt zmiany i przesunięcie terminu – nie mylone z budżetem.
+
+   **Doczytanie modelem** (przycisk „Doczytaj szczegóły modelem”, API `use_llm: true`, kod `riskminer/llm_extract.py`):
+   - model czyta cały dokument i rozpoznaje kontekst: która kwota jest budżetem całkowitym (nie dotacją), która długość dotyczy głównej sieci, przepustowość docelowa vs obecna, czas realizacji z dat, rodzaj wynagrodzenia, dodatkowe kategorie ograniczeń (R01, R05, R06, R08–R13), sprzeczności i braki;
+   - każda wartość ma cytat sprawdzony w dokumencie, a liczba musi być w cytacie – inaczej wynik jest odrzucany;
+   - reguły mają pierwszeństwo: inna wartość modelu trafia do wyboru eksperta („wskazanie modelu”), nic nie jest nadpisywane;
+   - długie dokumenty (PFU, SWZ) dzielone są na fragmenty z liczbami i słowami kluczowymi (do 4 wywołań);
+   - **uczenie z decyzji eksperta bez douczania modelu:** wybór eksperta w konflikcie (np. właściwy budżet) zapisuje się w tabeli `feature_feedback` i trafia do kolejnych zapytań jako wzorzec (najbardziej podobne rozstrzygnięcia);
+   - wynik jest zapamiętany (`llm_extract`), więc przeliczenie po wyborze eksperta jest natychmiastowe;
+   - szybkość: z GPU Apple (`LLM_GPU_LAYERS=-1`) ok. 30–60 s na dokument; na CPU / w Dockerze kilka minut.
+
+   **Ocena odczytu:** `.venv/bin/python cli.py eval-extract` (albo `--bez-modelu`) – zbiór testowy w `docs/ekstrakcja/` (tekst dokumentu + `oczekiwane.json`), wynik w `docs/ekstrakcja_ewaluacja.md`. Każdy nowy prawdziwy dokument z poprawnymi wartościami dopisany do zbioru pozwala zmierzyć, czy zmiana reguł lub modelu poprawia wynik.
 2. **Profile przypadków z bazy.** Opis przedmiotu z ogłoszenia o zamówieniu (albo opis KPO), wartości umów, wypłaty, terminy, opóźnienia i ryzyka. Ryzyka zatwierdzone przez eksperta ważą 1, propozycje 0,5, odrzucone są pomijane.
 3. **Ranking podobieństwa** (treść zadania: łączyć dane strukturalne z treścią opisów i wyjaśniać, które cechy przesądziły o podobieństwie):
    - porównywane cechy: podsektor główny i dodatkowe, rodzaj prac, formuła, budżet względem wartości umów, długość sieci, treść opisu (wspólne rdzenie słów), znane ograniczenia,

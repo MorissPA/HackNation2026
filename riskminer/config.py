@@ -33,7 +33,8 @@ LLM_MODEL_PATH = Path(os.environ.get("LLM_MODEL_PATH",
                                      DATA_DIR / "llm" / LOCAL_MODEL_FILES.get(LLM_MODEL, "bielik-11b-v2.6.gguf")))
 # CPU jest domyślny również na Macu. Metal można jawnie włączyć przez LLM_GPU_LAYERS=-1.
 LLM_GPU_LAYERS = int(os.environ.get("LLM_GPU_LAYERS", "0"))
-LLM_CONTEXT = int(os.environ.get("LLM_CONTEXT", "4096"))
+# Z GPU (Metal) 8192 tokenów mieści kilkustronicowy dokument w jednym wywołaniu; na CPU 4096 (szybciej, mniej pamięci).
+LLM_CONTEXT = int(os.environ.get("LLM_CONTEXT") or ("8192" if LLM_GPU_LAYERS else "4096"))
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
 

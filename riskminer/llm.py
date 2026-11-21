@@ -67,13 +67,13 @@ def output_schema(n_excerpts):
             "properties": {"wyniki": {"type": "array", "items": finding, "maxItems": 2}}}
 
 
-def _remote_completion(provider, model, messages, schema, system=None):
+def _remote_completion(provider, model, messages, schema, system=None, max_tokens=1024):
     if provider == "anthropic":
         if not config.LLM_API_KEY:
             raise ModelError("Ustaw LLM_API_KEY w środowisku backendu.")
         response = requests.post("https://api.anthropic.com/v1/messages", timeout=(5, 90),
             headers={"x-api-key": config.LLM_API_KEY, "anthropic-version": "2023-06-01"},
-            json={"model": model, "max_tokens": 1024, "system": system or instructions(),
+            json={"model": model, "max_tokens": max_tokens, "system": system or instructions(),
                   "messages": messages[1:]}, allow_redirects=False)
     elif provider == "ollama":
         response = requests.post(config.OLLAMA_BASE_URL.rstrip("/") + "/api/chat", timeout=(5, 120),
