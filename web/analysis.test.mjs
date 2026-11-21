@@ -29,3 +29,28 @@ test("formularz używa limitu z API i liczy znaki po usunięciu skrajnych spacji
     view.unmount();
   }
 });
+
+test("flaga ryzyka pokazuje cytat z opisu", async (t) => {
+  const quote = "Na trasie występują kolizje z istniejącą siecią.";
+  const response = {
+    input_text: quote,
+    features: { conflicts: {}, scale: {} },
+    comparison: {},
+    similar: [],
+    missing_inputs: [],
+    flags: [{
+      code: "R03", name: "Kolizje", strength: "średnia",
+      from_description: [{ value: "kolizje i istniejące uzbrojenie", source: quote }],
+    }],
+  };
+  t.mock.method(globalThis, "fetch", async () => ({ ok: true, json: async () => response }));
+  const view = renderer.create(React.createElement(AnalysisView, { minChars: 30 }));
+  try {
+    const submit = view.root.findAllByType("button").find(b => b.children.includes("Analizuj inwestycję"));
+    await renderer.act(() => submit.props.onClick());
+    assert.deepEqual(view.root.findByType("q").children, [quote]);
+    assert.equal(JSON.stringify(view.toJSON()).includes("[object Object]"), false);
+  } finally {
+    view.unmount();
+  }
+});

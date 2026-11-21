@@ -2,6 +2,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import hashlib
 import json
+import os
 import unittest
 from unittest.mock import Mock, patch
 
@@ -205,3 +206,16 @@ class EmbeddedModelTests(unittest.TestCase):
                     self.assertEqual(local_model.complete([], {}), '{"wynik":null}')
             llama.assert_called_once()
             get.assert_not_called()
+
+    def test_cpu_disables_metal_before_loading_model(self):
+        with TemporaryDirectory() as directory, patch("llama_cpp.Llama") as llama, patch.dict(os.environ):
+            path = Path(directory) / "bielik.gguf"
+            path.touch()
+            self.addCleanup(local_model._load.cache_clear)
+            os.environ.pop("GGML_METAL_DEVICES", None)
+            with patch.object(config, "LLM_GPU_LAYERS", 0):
+                local_model._load(path)
+            self.assertEqual(os.environ["GGML_METAL_DEVICES"], "0")
+            self.assertEqual(llama.call_args.kwargs["n_gpu_layers"], 0)
+            self.assertFalse(llama.call_args.kwargs["offload_kqv"])
+            self.assertFalse(llama.call_args.kwargs["op_offload"])

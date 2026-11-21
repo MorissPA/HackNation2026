@@ -14,7 +14,8 @@ Aplikacja działa na **http://localhost:8000** (jeden port: interfejs i API).
 
 - **Dane:** wolumen `riskminer-data` (`/data` w kontenerze) trzyma bazę SQLite, cache BZP/BIP i model GGUF. Przetrwa `docker compose restart` oraz `down` i `up`. Wyczyścić go można przez `docker compose down -v`.
 - **Arkusz organizatora:** montowany tylko do odczytu jako `/import/Risk_Miner_dane_projekty.xlsx`. Przy pustej bazie importuje się automatycznie przy starcie (`RISKMINER_AUTOIMPORT=1`). Inne położenie pliku: `RISKMINER_XLSX=/ścieżka/do/pliku.xlsx docker compose up -d`. Bez pliku arkusz można wgrać w interfejsie przyciskiem „Wgraj XLSX / CSV”.
-- **Model Bielik-11B** (~6,7 GB, sprawdzany SHA-256) jest wspólny z uruchomieniem bez kontenera: compose podłącza katalog `data/llm` z hosta jako `/data/llm` (inne położenie: `RISKMINER_MODELS=/ścieżka`). Gdy pliku brak, aplikacja pobiera go tam przy pierwszej analizie. Kontener nie ma dostępu do GPU Maca, więc model liczy na CPU: **ok. 2–2,5 min na fragment** (pierwsze wywołanie z ładowaniem modelu dłużej), a analiza wszystkich 62 fragmentów trwa ok. 2 godzin. Potrzeba ok. 8 GB pamięci dla Dockera (Ustawienia → Resources); kontekst modelu w kontenerze to 4096 tokenów (`LLM_CONTEXT`). Do analizy modelem na Macu szybsze jest uruchomienie bez kontenera (`npm run start`, GPU: ok. 6 s na fragment).
+- **Model Bielik-11B** (~6,7 GB, sprawdzany SHA-256) jest wspólny z uruchomieniem bez kontenera: compose podłącza katalog `data/llm` z hosta jako `/data/llm` (inne położenie: `RISKMINER_MODELS=/ścieżka`). Gdy pliku brak, aplikacja pobiera go tam przy pierwszej analizie. Kontener nie ma dostępu do GPU Maca, więc model liczy na CPU: **ok. 2–2,5 min na fragment** (pierwsze wywołanie z ładowaniem modelu dłużej), a analiza wszystkich 62 fragmentów trwa ok. 2 godzin. Potrzeba ok. 8 GB pamięci dla Dockera (Ustawienia → Resources); kontekst modelu w kontenerze to 4096 tokenów (`LLM_CONTEXT`). Na Macu z działającym Metal można uruchomić aplikację natywnie z `LLM_GPU_LAYERS=-1 npm run start` (w poprzednim pomiarze GPU ok. 6 s na fragment).
+- **Konfiguracja modelu w kontenerze:** przekaż zmienne z powłoki lub z pliku przez `docker compose --env-file .env.local up -d`. Zobacz [llm.env.example](llm.env.example). Własny GGUF umieść w katalogu montowanym jako `/data/llm` i wskaż ścieżkę wewnątrz kontenera. Dla Ollamy podaj adres dostępny z kontenera.
 - **Inny port:** `RISKMINER_PORT=9000 docker compose up -d`.
 - **macOS:** paczka organizatora leży zwykle w folderze Pobrane. Przy pierwszym starcie macOS pyta, czy Docker może uzyskać dostęp do tego folderu. Bez zgody kontener zatrzymuje się w stanie „Created”. Zgodę można też włączyć w Ustawienia systemowe → Prywatność i ochrona → Pliki i foldery → Docker.
 - **Pierwsza budowa** obrazu trwa ok. 20 minut, bo `llama-cpp-python` kompiluje się ze źródeł. Obraz waży ok. 1,1 GB, a kolejne budowy korzystają z cache.
@@ -41,6 +42,14 @@ npm run dev        # API (FastAPI) na :8000 + interfejs (Vite) na http://localho
 ```
 
 W interfejsie kliknij **Importuj paczkę organizatora** (plik `../Risk_Miner_dane_projekty.xlsx`), a potem **Pobierz z BZP wszystkie rekordy**.
+
+Testy (z katalogu głównego repozytorium):
+
+```bash
+.venv/bin/pip install -r requirements-test.txt
+.venv/bin/python -m unittest discover -s tests
+cd web && npm test
+```
 
 Inne sposoby uruchomienia:
 
@@ -84,7 +93,7 @@ Własny plik GGUF można wskazać przez `LLM_MODEL_PATH` i opisać przez `LLM_MO
 | **Bielik-11B v2.6 Instruct** (SpeakLeash, Q4_K_M, ~6,7 GB) – **domyślny** | **81,6%** – 37 trafnych, 6 częściowo, 6 błędnych | ~6 s / fragment (Mac, GPU Metal) | wszędzie (lokalnie, CLI, Docker) |
 | Qwen2.5-1.5B Instruct (Q4_K_M, ~1,1 GB) – wcześniejszy model, do porównań | 56,1% – 26 trafnych, 3 częściowo, 20 błędnych | ~2,5 s / fragment (CPU) | tylko po ustawieniu `LLM_MODEL=qwen2.5-1.5b-instruct` |
 
-Model wybiera `LLM_MODEL` (`bielik-11b-v2.6-instruct` albo `qwen2.5-1.5b-instruct`); oba pliki pobierają się automatycznie z przypiętej wersji i są sprawdzane sumą SHA-256. `LLM_GPU_LAYERS` domyślnie wynosi `-1` (GPU Metal) na Macu z Apple Silicon i `0` (CPU) gdzie indziej.
+Model wybiera `LLM_MODEL` (`bielik-11b-v2.6-instruct` albo `qwen2.5-1.5b-instruct`); oba pliki pobierają się automatycznie z przypiętej wersji i są sprawdzane sumą SHA-256. Domyślnie model korzysta z CPU (`LLM_GPU_LAYERS=0`) i kontekstu 4096 tokenów. W natywnym środowisku z działającym Metal można jawnie ustawić `LLM_GPU_LAYERS=-1`.
 
 Zbiór testowy to [docs/llm_zbior_testowy.csv](docs/llm_zbior_testowy.csv): każdy unikalny fragment źródłowy z oczekiwaną kategorią przyczyny (lub „brak”, gdy dokument nie podaje przyczyny). Etykiety „zespół” zastępuje automatycznie decyzja eksperta z kolejki weryfikacji. Ocena:
 
@@ -276,7 +285,7 @@ Tabele: `project`, `procedure` (OCID), `project_link` (z metodą dopasowania, do
 
 **Gdzie przetwarzane są dane:**
 - Baza SQLite, cache zapytań, dokumenty i decyzje eksperta są lokalnie: na komputerze albo w wolumenie kontenera.
-- Domyślny model językowy (Bielik-11B v2.6, llama.cpp) działa w procesie aplikacji – na Macu na GPU, gdzie indziej na CPU. Fragmenty dokumentów nie opuszczają maszyny i nie jest potrzebny klucz API.
+- Domyślny model językowy (Bielik-11B v2.6, llama.cpp) działa w procesie aplikacji na CPU. GPU można włączyć w konfiguracji natywnej. Fragmenty dokumentów nie opuszczają maszyny i nie jest potrzebny klucz API.
 - Opcjonalnie można ustawić `LLM_PROVIDER=ollama` (serwer na wskazanym hoście) albo `LLM_PROVIDER=anthropic`. W tym drugim przypadku fragmenty trafiają do API Anthropic, zgodnie z warunkami i regionem konta, potencjalnie poza UE. Zmiana dostawcy nie wymaga zmian w kodzie.
 - Aplikacja nie przetwarza danych osobowych poza tym, co jest w publicznych ogłoszeniach: nazwy zamawiających i wykonawców, a przy jednoosobowych firmach także imiona i nazwiska.
 

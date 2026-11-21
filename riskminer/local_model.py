@@ -61,7 +61,9 @@ def _load(path):
         if path.parent != config.DATA_DIR / "llm" or path.name not in MODELS:
             raise LocalModelError(f"Brak wskazanego pliku modelu: {path}")
         _download(path, *MODELS[path.name])
-    return Llama(model_path=str(path), n_ctx=config.LLM_CONTEXT, n_gpu_layers=config.LLM_GPU_LAYERS, verbose=False)
+    gpu = config.LLM_GPU_LAYERS != 0
+    return Llama(model_path=str(path), n_ctx=config.LLM_CONTEXT, n_gpu_layers=config.LLM_GPU_LAYERS,
+                 offload_kqv=gpu, op_offload=None if gpu else False, verbose=False)
 
 
 def complete(messages, schema):
@@ -72,5 +74,6 @@ def complete(messages, schema):
             answer = model.create_chat_completion(messages=messages, temperature=0, max_tokens=512,
                         response_format={"type": "json_object", "schema": schema})
         except (OSError, requests.RequestException, ImportError, RuntimeError, ValueError) as exc:
-            raise LocalModelError(f"Uruchomienie lokalnego modelu nie powiodło się: {exc}") from exc
+            hint = " Ustaw LLM_GPU_LAYERS=0 i uruchom aplikację ponownie." if config.LLM_GPU_LAYERS else ""
+            raise LocalModelError(f"Uruchomienie lokalnego modelu nie powiodło się: {exc}.{hint}") from exc
     return answer["choices"][0]["message"]["content"]

@@ -39,6 +39,39 @@ class FeatureTests(unittest.TestCase):
         self.assertEqual(features["scale"]["length_km"]["value"], .75)
 
 
+    def test_length_range_keeps_both_ends(self):
+        for length in ("od 3 do 5 km", "3–5 km", "3000 m - 5 km", "3,0–5,0 km"):
+            with self.subTest(length=length):
+                text = f"Budowa wodociągu o długości {length}. Budżet 8 mln zł."
+                features = analysis.extract_features(text)
+                self.assertNotIn("length_km", features["scale"])
+                options = features["conflicts"]["length_km"]
+                self.assertEqual([o["value"] for o in options], [3, 5])
+                self.assertIn(length, options[0]["source"])
+                selected = analysis.extract_features(text, {"length_km": 3})
+                self.assertEqual(selected["scale"]["length_km"]["value"], 3)
+                self.assertFalse(selected["conflicts"])
+
+    def test_budget_range_inherits_unit_and_tax(self):
+        for text in ("Budżet netto od 8 do 10 mln zł.", "Budżet 8–10 mln zł netto."):
+            with self.subTest(text=text):
+                budget = analysis.extract_features(text, {"budget_pln": 8e6})["budget_pln"]
+                self.assertEqual(budget["value"], 8e6)
+                self.assertTrue(budget["net"])
+
+    def test_negative_constraints_and_words_with_similar_stems(self):
+        def constraints(text):
+            return {item["value"] for item in analysis.extract_features(text)["constraints"]}
+
+        self.assertFalse(constraints("Budowa oczyszczalni ścieków o wydajności 1200 RLM."))
+        self.assertFalse(constraints("Nie stwierdzono kolizji. Pozwolenie wodnoprawne nie jest wymagane."))
+        self.assertFalse(constraints("Budowa wodociągu bez kolizji z uzbrojeniem terenu."))
+        self.assertIn("kolizje i istniejące uzbrojenie",
+                      constraints("Nie stwierdzono kolizji przy szkole, ale występują kolizje przy urzędzie."))
+        self.assertIn("pozwolenie wodnoprawne / odbiornik ścieków",
+                      constraints("Budowa oczyszczalni ścieków z wylotem do cieku."))
+
+
 class AuditTests(unittest.TestCase):
     def setUp(self):
         self.con = db.connect(":memory:")
@@ -151,6 +184,36 @@ class AuditTests(unittest.TestCase):
         self.assertEqual(result["comparison"]["budget_after_growth"]["value"], 8_800_000)
         net = analysis.analyze(self.con, WATER.replace("8 mln zł.", "8 mln zł netto."))
         self.assertNotIn("budget_after_growth", net["comparison"])
+
+    def test_foreign_currency_does_not_feed_forecast(self):
+        self.historical_cases()
+        for amount in ("8 mln EUR", "8 mln euro", "8 mln €", "8 000 000 USD", "od 8 do 10 mln EUR"):
+            with self.subTest(amount=amount):
+                text = f"Budowa wodociągu o długości 5 km. Budżet {amount}."
+                result = api.run_analysis(api.AnalysisRequest(text=text), self.con)
+                self.assertIsNone(result["features"]["budget_pln"])
+                self.assertNotIn("budget_after_growth", result["comparison"])
+                self.assertTrue(any(amount in note for note in result["comparison"]["notes"]))
+
+    def test_second_net_option_does_not_use_gross_comparison_for_projection(self):
+        self.historical_cases()
+        text = "Budowa wodociągu o długości 5 km. Budżet netto 8 mln zł lub 10 mln zł."
+        req = api.AnalysisRequest(text=text, choices={"budget_pln": 10e6})
+        result = api.run_analysis(req, self.con)
+        self.assertTrue(result["features"]["budget_pln"]["net"])
+        self.assertNotIn("budget_after_growth", result["comparison"])
+        explicit_gross = req.model_copy(update={"text": text.removesuffix(".") + " brutto."})
+        gross = api.run_analysis(explicit_gross, self.con)
+        self.assertEqual(gross["comparison"]["budget_after_growth"]["value"], 11e6)
+
+    def test_forecast_waits_for_confirmed_length_from_range(self):
+        self.historical_cases()
+        text = "Budowa wodociągu o długości 3–5 km. Budżet 8 mln zł."
+        result = api.run_analysis(api.AnalysisRequest(text=text), self.con)
+        self.assertIn("length_km", result["features"]["conflicts"])
+        self.assertNotIn("budget_after_growth", result["comparison"])
+        result = api.run_analysis(api.AnalysisRequest(text=text, choices={"length_km": 5}), self.con)
+        self.assertEqual(result["comparison"]["budget_after_growth"]["value"], 8_800_000)
 
     def test_conflicting_source_values_require_explicit_choice_including_export(self):
         self.historical_cases()

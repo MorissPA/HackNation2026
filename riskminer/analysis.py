@@ -26,7 +26,7 @@ SUBSECTORS = [
     ("Kanalizacja deszczowa i retencja", r"kanalizac\w*\s+deszcz|wód opadowych|retencj|odwodnieni|zbiornik\w* retencyjn"),
 ]
 CONSTRAINTS = [
-    ("pozwolenie wodnoprawne / odbiornik ścieków", r"pozwoleni\w* wodnoprawn|odbiornik\w*|wylot\w* (ścieków|do)|zrzut\w*|wody polskie|jezior|rzek|cieku?|potoku"),
+    ("pozwolenie wodnoprawne / odbiornik ścieków", r"pozwoleni\w* wodnoprawn|odbiornik\w*\s+ściek\w*|wylot\w* (ścieków|do)|zrzut\w*|wody polskie|\b(?:jezior|rzek|ciek|potok)\w*\b"),
     ("decyzja środowiskowa / ochrona przyrody", r"decyzj\w* (o )?środowiskow|natura 2000|obszar\w* chronion|ochron\w* przyrody|RDOŚ"),
     ("grunty prywatne / dostęp do terenu", r"grunt\w* prywatn|własnoś\w* prywatn|służebnoś|wejści\w* w teren|zgod\w* właściciel|prawo do dysponowania"),
     ("kolizje i istniejące uzbrojenie", r"kolizj|istniejąc\w* (uzbrojeni|sieci|infrastruktur)|uzbrojeni\w* teren"),
@@ -120,7 +120,7 @@ def text_from_file(filename: str, content: bytes) -> str:
         from pypdf import PdfReader
         reader = PdfReader(io.BytesIO(content))
         text = clean_pdf_text("\n".join((page.extract_text() or "") for page in reader.pages))
-        if len(text.strip()) < 50:
+        if not text.strip():
             raise ValueError("PDF nie ma warstwy tekstowej (skan) – OCR nie jest obsługiwany. Wklej opis jako tekst.")
         return text
     if name.endswith(".docx"):
@@ -148,14 +148,37 @@ def _num(s):
 
 
 NUMBER = r"(?<![\d.,])(?:\d{1,3}(?:[ \xa0]\d{3})+|\d+)(?:[.,]\d+)?"
-AMOUNT = (r"(?P<amount>" + NUMBER + r")\s*(?:(?P<unit>mln|milion\w*|tys\.?)(?:\s*(?:zł|PLN))?|(?:zł|PLN))"
-          r"(?!\w)(?:\s+(?P<tax>netto|brutto))?")
+PLN = r"PLN|zł(?:ot(?:y|e|ych|ego))?"
+FOREIGN = (r"EUR|euro|USD|GBP|CHF|CZK|JPY|CAD|AUD|SEK|NOK|DKK|UAH|dolar\w*|funt\w*|frank\w*"
+           r"|(?-i:[A-Z]{3})(?!\s*[/\d])")
+AMOUNT = (r"(?P<amount>" + NUMBER + r")"
+          r"(?:\s*(?P<unit>mln\.?|milion\w*|tys\.?|tysiąc\w*|tysięc\w*)(?!\w))?"
+          r"(?:\s*(?P<currency>(?:" + PLN + "|" + FOREIGN + r")(?!\w)|[€$£¥]))?"
+          r"(?:\s+(?P<tax>netto|brutto)\b)?")
 BUDGET = re.compile(
     r"\b(?:budżet(?:u)?|(?:całkowit\w*\s+)?(?:koszt|wartość)(?:\s+całkowit\w*)?)"
     r"(?:\s+(?:inwestycji|projektu|przedsięwzięcia|zadania|budowy|brutto|netto|szacunkowy|wynosi|to|około|ok\.?))*"
-    r"\s*[:=–-]?\s*" + AMOUNT, re.I)
-ALTERNATIVE = re.compile(r"\s*(?:lub|albo|bądź|do|[–—-])\s*" + AMOUNT, re.I)
-LENGTH = re.compile(r"(" + NUMBER + r")\s*(km|mb|m)\b(?!\s*[23³²])", re.I)
+    r"\s*[:=–-]?\s*(?:od\s+)?" + AMOUNT, re.I)
+ALTERNATIVE = re.compile(r"\s*(?:lub\b|albo\b|bądź\b|do\b|[–—-])\s*" + AMOUNT, re.I)
+LENGTH_UNIT = r"(?:km|mb|m)\b(?!\s*[23³²])"
+LENGTH = re.compile(
+    r"(?:(?:\bod\s+)?(?P<start>" + NUMBER + r")\s*(?P<start_unit>" + LENGTH_UNIT + r")?"
+    r"\s*(?:do\b|[–—-])\s*)?"
+    r"(?P<end>" + NUMBER + r")\s*(?P<end_unit>" + LENGTH_UNIT + r")", re.I)
+CLAUSE = re.compile(r"[.!?;,\n]|\b(?:ale|lecz|jednak|natomiast)\b", re.I)
+NEGATED_BEFORE = re.compile(
+    r"\b(?:bez|brak|nie\s+ma|nie\s+stwierdzono|nie\s+wykazano|nie\s+występuj\w*|"
+    r"nie\s+przewiduj\w*|nie\s+wymaga\b)(?:\s+\w+){0,5}\s*$", re.I)
+NEGATED_AFTER = re.compile(r"^\s+(?:nie\s+występuj\w*|nie\s+stwierdzono|nie\s+jest\s+wymagan\w*)\b", re.I)
+
+
+def _constraint_match(text, pattern):
+    for match in re.finditer(r"(?:" + pattern + r")\w*", text, re.I):
+        before = CLAUSE.split(text[max(0, match.start() - 100):match.start()])[-1]
+        after = CLAUSE.split(text[match.end():match.end() + 100], maxsplit=1)[0]
+        if not NEGATED_BEFORE.search(before) and not NEGATED_AFTER.search(after):
+            return match
+    return None
 
 
 def _length_options(text):
@@ -164,30 +187,51 @@ def _length_options(text):
         before = text[max(0, m.start()-65):m.start()]
         if re.search(r"(?:średnic\w*|głębokoś\w*|szerokoś\w*|wysokoś\w*)\s*[:=]?\s*$", before, re.I):
             continue
-        km = _num(m[1]) * (1 if m[2].lower() == "km" else .001)
-        option = {"value": round(km, 3), "source": _snip(text, m, 40)}
-        lengths.append(option)
+        end_unit = m["end_unit"]
+        bounds = [(m["end"], end_unit)]
+        if m["start"]:
+            bounds.insert(0, (m["start"], m["start_unit"] or end_unit))
+        options = [{"value": round(_num(value) * (1 if unit.lower() == "km" else .001), 3),
+                    "source": _snip(text, m, 40)} for value, unit in bounds]
+        lengths.extend(options)
         if (re.search(r"(?:łącznie|razem|ogółem|(?:łączn\w*|całkowit\w*)\s+długoś\w*)"
                       r"(?:\s+(?:sieci|wynosi|to|około))*\s*[:=]?\s*$", before, re.I)
                 or re.match(r"\s*,?\s*w tym\b", text[m.end():], re.I)):
-            totals.append(option)
+            totals.extend(options)
     return totals or lengths
 
 
 def _budget_options(text):
-    options = []
+    options, foreign = [], []
     for first in BUDGET.finditer(text):
-        m = first
-        while m:
-            unit = (m["unit"] or "").lower()
-            factor = 1e6 if unit.startswith(("mln", "milion")) else 1000 if unit.startswith("tys") else 1
-            option = {"value": round(_num(m["amount"]) * factor, 2), "source": text[first.start():m.end()]}
-            if re.search(r"\bnetto\b", m.group(), re.I):
+        amounts = [first]
+        while following := ALTERNATIVE.match(text, amounts[-1].end()):
+            amounts.append(following)
+        shared_unit = next((m["unit"] for m in reversed(amounts) if m["unit"]), "")
+        currencies = [m["currency"] for m in amounts if m["currency"]]
+        if not shared_unit and not currencies:
+            continue
+        source = text[first.start():amounts[-1].end()]
+        if any(not re.fullmatch(PLN, currency, re.I) for currency in currencies):
+            foreign.append(source)
+            continue
+        heading = text[first.start():first.start("amount")]
+        heading_tax = re.search(r"\b(netto|brutto)\b", heading, re.I)
+        # Kwalifikator na początku dotyczy wariantów do chwili jawnej zmiany.
+        tax = heading_tax[0].lower() if heading_tax else next(
+            (m["tax"].lower() for m in amounts if m["tax"]), None)
+        for i, m in enumerate(amounts):
+            if m["tax"]:
+                tax = m["tax"].lower()
+            unit = m["unit"] or (shared_unit if not m["currency"] else "")
+            factor = 1e6 if unit.lower().startswith(("mln", "milion")) else 1000 if unit else 1
+            option = {"value": round(_num(m["amount"]) * factor, 2),
+                      "source": text[first.start():m.end()] if i else first.group()}
+            if tax == "netto":
                 option["note"] = "Kwota netto. Prognoza na podstawie kwot brutto wymaga podania budżetu brutto."
                 option["net"] = True
             options.append(option)
-            m = ALTERNATIVE.match(text, m.end())
-    return options
+    return options, foreign
 
 
 def _resolve(options, key, choices, conflicts):
@@ -241,13 +285,16 @@ def extract_features(text: str, choices=None) -> dict:
             scale[key] = {"value": _num(m.group(1)), "unit": unit, "source": _snip(t, m, 40)}
     f["scale"] = scale
 
-    f["budget_pln"] = _resolve(_budget_options(t), "budget_pln", choices, f["conflicts"])
+    budget_options, foreign_budgets = _budget_options(t)
+    f["budget_pln"] = _resolve(budget_options, "budget_pln", choices, f["conflicts"]) if not foreign_budgets else None
+    if foreign_budgets:
+        f["budget_note"] = "Budżet w obcej walucie. Do prognozy podaj kwotę w PLN. Źródło: " + ", ".join(foreign_budgets)
     m = re.search(r"(\d+)\s*(miesi\w+|mies\.)", t, re.I)
     f["duration_months"] = {"value": int(m.group(1)), "source": _snip(t, m, 50)} if m else None
 
     f["constraints"] = []
     for name, rx in CONSTRAINTS:
-        m = re.search(rx, t, re.I)
+        m = _constraint_match(t, rx)
         if m:
             f["constraints"].append({"value": name, "source": _snip(t, m, 50)})
     return f
@@ -456,6 +503,8 @@ def analyze(con, text: str, top_k: int = 5, min_score: float = 50.0, choices=Non
     delay = _stat([s["delay_days"] for s in similar])
     planned = _stat([s["planned_months"] for s in similar])
     comparison = {"growth_pct": growth, "delay_days": delay, "planned_months": planned, "notes": []}
+    if feats.get("budget_note"):
+        comparison["notes"].append(feats["budget_note"])
     if (feats.get("budget_pln") or {}).get("net"):
         comparison["notes"].append(feats["budget_pln"]["note"])
     if not similar:

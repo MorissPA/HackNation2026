@@ -19,6 +19,11 @@ services:
       # Kontener nie ma dostępu do GPU Maca – model liczy na CPU. Mniejszy kontekst mieści się w 8 GB pamięci Dockera.
       LLM_GPU_LAYERS: "0"
       LLM_CONTEXT: "${LLM_CONTEXT:-4096}"
+      LLM_PROVIDER:
+      LLM_MODEL:
+      LLM_MODEL_PATH:
+      LLM_API_KEY:
+      OLLAMA_BASE_URL:
     restart: unless-stopped
 
 volumes:

@@ -67,7 +67,9 @@ function RiskCard({ fl, nSimilar }: { fl: Row; nSimilar: number }) {
       <dl className="dl">
         <dt>Dane źródłowe</dt>
         <dd>{fl.basis}
-          {fl.from_description?.length ? <div className="small muted">Z Twojego opisu: {fl.from_description.join(", ")}</div> : null}
+          {fl.from_description?.map((signal: { value: string; source: string }) => (
+            <div className="small muted" key={signal.value}>Z Twojego opisu: <q>{signal.source}</q></div>
+          ))}
           {fl.evidence?.length ? (
             <details style={{ marginTop: 6 }}>
               <summary className="link">Pokaż dowody z dokumentów ({fl.evidence.length})</summary>
@@ -184,7 +186,7 @@ export function AnalysisView({ minChars }: { minChars?: number }) {
                 {options.map((option, index) => (
                   <p key={index}><button className="btn btn-sm" disabled={busy}
                     onClick={() => run(() => api.analyze(text, { ...result.choices, [key]: option.value }))}>
-                    {key === "budget_pln" ? pln(option.value) : num(option.value) + " km"}
+                    {key === "budget_pln" ? pln(option.value) + (option.net ? " netto" : "") : num(option.value) + " km"}
                   </button> „{option.source}”</p>
                 ))}
               </div>
