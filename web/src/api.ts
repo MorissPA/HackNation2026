@@ -1,0 +1,96 @@
+// Klient REST API (backend: ../api.py, przez proxy Vite /api -> :8000)
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export type Row = Record<string, any>;
+
+export interface Stats {
+  projects: number; fetched: number; links_confirmed: number; links_proposed: number;
+  analysis_min_chars: number; proposals_open: number; sample_available: boolean; llm_model?: string;
+}
+export interface Feature { name: string; status: string; detail: string }
+export interface Candidate {
+  ocid: string; rank: number; score: number; title: string; base_notice: string;
+  confidence: string | null; matched: number | null; checked: number | null;
+  features: Feature[]; notices: { type: string; label: string; number: string; date: string }[];
+}
+export interface Card {
+  project: Row; kpo_value: number | null; links: Row[]; candidates: Candidate[]; contracts: Row[];
+  changes: Row[]; facts: Row[]; events: Row[]; gaps: { key: string; message: string }[]; notices: Row[];
+  documents: Row[];
+}
+export interface Job { id: string; status: string; total: number; done: number; current: string | null; log: string[];
+  kind?: string; model?: string;
+  network_calls?: number; sources?: string[] }
+export interface ImportReport { run_id: number; counts: Record<string, number>;
+  rows: { row_no: number | null; project_id: string | null; status: string; message: string | null }[] }
+export interface Risk { code: string; name: string; effects: string; status?: string; proposed_by?: string | null;
+  comment?: string | null; created_at?: string | null; decided_at?: string | null }
+export interface QueueItem {
+  type: "powiazanie" | "ryzyko"; id: string; project_id: string; project: string; recipient: string;
+  // ryzyko
+  event_id?: number; code?: string; title?: string; origin?: string; details?: string; date?: string | null;
+  source_notice?: string | null; source_url?: string | null; source_section?: string | null; notice_label?: string | null;
+  quote?: string | null; before?: string | null; after?: string | null; llm_confidence?: string | null;
+  event_effect_quote?: string | null;
+  contract_context?: { label: string; value_num: number; unit: string }[];
+  // powiązanie
+  ocid?: string; confidence?: string | null; matched?: number | null; checked?: number | null; evidence?: string;
+  candidates?: Candidate[];
+}
+
+async function call<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, init);
+  if (!res.ok) {
+    let msg = `${res.status} ${res.statusText}`;
+    try { const j = await res.json(); if (j.detail) msg = typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail); } catch { /* brak JSON */ }
+    throw new Error(msg);
+  }
+  return res.json() as Promise<T>;
+}
+const post = <T>(path: string, body?: unknown) =>
+  call<T>(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+
+export const api = {
+  stats: () => call<Stats>("/api/stats"),
+  risks: () => call<Risk[]>("/api/risks"),
+  projects: () => call<Row[]>("/api/projects"),
+  card: (id: string) => call<Card>(`/api/projects/${encodeURIComponent(id)}`),
+  noticeHtmlUrl: (number: string) => `/api/notices/html?number=${encodeURIComponent(number)}`,
+  importSample: () => post<ImportReport>("/api/import/sample"),
+  importFile: (file: File) => {
+    const fd = new FormData(); fd.append("file", file);
+    return call<ImportReport>("/api/import", { method: "POST", body: fd });
+  },
+  startFetch: (ids: string[] | "all") => post<Job>("/api/fetch", ids === "all" ? { all: true } : { project_ids: ids }),
+  job: (id: string) => call<Job>(`/api/jobs/${id}`),
+  proposals: (status: string) => call<Row[]>(`/api/proposals?status=${encodeURIComponent(status)}`),
+  decideDocument: (pid: string, url: string, action: "accept" | "reject") =>
+    post<{status: string}>(`/api/projects/${encodeURIComponent(pid)}/documents/decision`, {url, action}),
+  decideEvent: (id: number, action: "accept" | "reject", code?: string, comment?: string, exemplar = false) =>
+    post<{ status: string }>(`/api/events/${id}/decision`, { action, code, comment, exemplar }),
+  llmAll: () => post<Job>("/api/llm/all"),
+  verifyQueue: () => call<QueueItem[]>("/api/verify-queue"),
+  proposeRisk: (name: string, effects?: string) => post<{ code: string; status: string }>("/api/risks", { name, effects }),
+  decideRisk: (code: string, action: "approve" | "reject", comment?: string) =>
+    post<{ status: string }>(`/api/risks/${encodeURIComponent(code)}/decision`, { action, comment }),
+  rules: () => call<{ text: string; updated_at: string | null }>("/api/settings/llm-rules"),
+  saveRules: (text: string) => call<{ text: string; updated_at: string }>("/api/settings/llm-rules", {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) }),
+  analyzeRisks: (id: string) =>
+    post<{sources: number; created: number; cached: number; abstained: number}>(`/api/projects/${encodeURIComponent(id)}/llm`),
+  analyze: (text: string, choices?: Record<string, number>, useLlm = false) =>
+    post<Row>("/api/analysis", { text, choices, use_llm: useLlm }),
+  analyzeFile: (file: File) => {
+    const fd = new FormData(); fd.append("file", file);
+    return call<Row>("/api/analysis/file", { method: "POST", body: fd });
+  },
+  exportAnalysis: async (text: string, format: "csv" | "json", choices?: Record<string, number>, useLlm = false) => {
+    const res = await fetch(`/api/analysis/export?format=${format}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, choices, use_llm: useLlm }) });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    return res.blob();
+  },
+  kpoLinks: () => call<Row[]>("/api/kpo-links"),
+  decideLink: (pid: string, action: "confirm" | "reject", ocid?: string, comment?: string) =>
+    post<Row>(`/api/projects/${encodeURIComponent(pid)}/link`, { action, ocid, comment }),
+};

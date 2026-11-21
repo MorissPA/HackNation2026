@@ -1,0 +1,50 @@
+project_id,tekst_sha1,oczekiwane,czesciowo,etykieta,uzasadnienie,fragment
+RM-2026-001,f20fddd39d3d,brak,R06,zespół,"sam skutek (zmiana harmonogramu), bez przyczyny",zmiana harmonogramu rzeczowo-finansowego
+RM-2026-001,44bbae470288,R02|R07,,zespół,nieujęte w dokumentacji mury do wyburzenia – stan istniejący,"roboty uzupełniające - zmiany o niskiej wartości, na podstawie protokołu - konieczność wykonania robót polegających na wyburzeniu murów ceglano -betonowych wraz"
+RM-2026-001,5c1e32b91a59,brak,,zespół,tylko „protokół” – brak treści przyczyny,protokół
+RM-2026-001,56a62a26cdf8,brak,,zespół,tylko „porozumienie” – brak treści przyczyny,porozumienie
+RM-2026-002,20f94e4cb285,brak,R06,zespół,"sama zmiana terminu, bez przyczyny",zmiana terminu wykonania umowy
+RM-2026-002,18c56ee59640,brak,,zespół,tytuł obwieszczenia – zwykły etap procedury,obwieszczenie dotyczące budowy oczyszczalni ścieków w modlikowicach zlokalizowanej na działkach o numerach ewidencyjnych 106 i 100
+RM-2026-002,cab485a68d17,R04,,zespół,zmiana terminu załatwienia sprawy przez organ,"zawiadomienie o zmianie terminu załatwienia sprawy - ""budowa oczyszczalni ścieków w modlikowicach"""
+RM-2026-002,24c64e201282,brak,,zespół,tytuł zapytania ofertowego,zapytanie prąd oczyszczalnia modlikowice-dokumentacja projektowa.
+RM-2026-002,9bc031fdceec,brak,R04,zespół,"etap postępowania środowiskowego, bez problemu",zawiadomienie - obwieszczenie o zebranych dowodach przed wydaniem decyzji o środowiskowych uwarunkowaniach - budowa oczyszczalni ścieków w modlikowicach
+RM-2026-002,579cbc082233,brak,R04,zespół,obwieszczenie o wydaniu decyzji,obwieszczenie o wydaniu decyzji - budowa oczyszczalni ścieków w modlikowicach
+RM-2026-002,7194b289f982,brak,R04,zespół,obwieszczenie – etap procedury,obwieszczenie - budowa oczyszczalni ścieków w modlikowicach
+RM-2026-002,8654ac1574b2,brak,R04,zespół,decyzja – etap procedury,decyzja - budowa oczyszczalni ścieków w modlikowicach
+RM-2026-002,34dc787f8ffd,brak,R13,zespół,wiersz zestawienia kwot w budżecie,"1.3.2.1 budowa oczyszczalni ścieków w modlikowicach urząd gminy zagrodno 2023 2026 13 700 000,00 13 000 000,00 0,00 0,00 0,00 0,00"
+RM-2026-003,37b27d9cf016,R07|R01,,zespół,zwiększenie zakresu względem PFU,"w związku ze zwiększeniem zakresu robót w stosunku do przedmiotu zamówienia opisanego w programie funkcjonalno użytkowym, zaszła konieczność dokonania zmian w z"
+RM-2026-003,5941a591788e,R04,,zespół,przedłużające się postępowanie o pozwolenie wodnoprawne,przedłużające się postępowanie administracyjne prowadzone przez państwowe gospodarstwo wodne wody polskie w sprawie udzielenia pozwolenia wodnoprawnego na usług
+RM-2026-004,3fec885f8130,R01|R07,R09,zespół,docieplenie fundamentów spoza pierwotnego zakresu (protokół konieczności),"• protokół konieczności nr 1 sporządzony w dniu 29 kwietnia 2026 r. docieplenie ścian fundamentowych jest kluczowym elementem, wpływającym na efektywność energe"
+RM-2026-004,89cde1e77352,R02|R01,R04,zespół,niedostosowana moc przyłączeniowa istniejącego obiektu,brak dostosowania obiektu do wymagań zmodernizowanej stacji uzdatniania wody w zakresie mocy przyłączeniowej sieci elektroenergetycznej.
+RM-2026-004,3e7938699795,R02,R07,zespół,nieszczelne istniejące zasuwy,"w trakcie prowadzonych prac stwierdzono nieszczelność dwóch istniejących zasuw dn150, zlokalizowanych na rurociągach napełniających dwa istniejące zbiorniki ret"
+RM-2026-004,e27a794722ad,R02,R07,zespół,ponowna nieszczelność istniejących zasuw,"w trakcie prowadzonych prac stwierdzono nieszczelność dwóch istniejących zasuw dn150, zlokalizowanych na rurociągach napełniających dwa istniejące zbiorniki ret"
+RM-2026-005,83f0c83e7283,R07,,zespół,roboty dodatkowe bez podanej przyczyny,roboty dodatkowe
+RM-2026-006,de0f97bcde11,R07,,zespół,"roboty dodatkowe nie do przewidzenia, bez głębszej przyczyny","zmiana umowy była spowodowana koniecznością wykonania robót dodatkowych, których nie dało się przewidzieć przed zawarciem umowy"
+RM-2026-006,cd51471ebffe,R02,R07,zespół,stan stropu komory reaktora (korozja) – stan istniejący,"zmiana umowy była konieczna z powodu konieczności wykonania robót dodatkowych, których nie można było przewidzieć opisując przedmiot zamówienia ponieważ część o"
+RM-2026-006,0898f1074375,R07,,zespół,roboty dodatkowe bez głębszej przyczyny,"zmiana była konieczna z powodu wystąpienia robót dodatkowych, których nie można było przewidzieć przed zawarciem umowy."
+RM-2026-008,69bd5a7f9370,R03,,zespół,sprzeciw mieszkańców wobec wejścia na działki,na podstawie § 14 ust 2 pkt 1) lit b) oraz § 14 ust 2 i pkt 2) lit a umowy nr zp.272.1.2026 część 1 z dnia 12.04.2026 r. w związku z zastosowaniem odmiennych ro
+RM-2026-009,1399184ef44c,R07,,zespół,roboty dodatkowe dla SUW,dokonano zmiany umowy w związku z wystąpieniem robót dodatkowych niezbędnych dla właściwego funkcjonowania stacji uzdatniania wody.
+RM-2026-010,29da4be72f9d,R06|R12,,zespół,wydłużający się proces instalacji,wydłużający się proces instalacji rurociągów kanalizacyjnych
+RM-2026-011,ec6d4eb718f6,R02,R07,zespół,grunt skalny – warunki gruntowe,"w związku z pojawieniem się w trakcie realizacji robót budowlanych budowy sieci wodociągowej w miejscowości sanoczek gruntu skalnego na odcinku w150 – t80, tj. "
+RM-2026-012,fb4c2640103b,R03,R12,zespół,wstrzymanie robót przez brak ustalenia granic,zmiana wynikająca z propozycji wykonawcy na wykonanie odejść i otworów w studniach tranzytu oraz wykonanie zamienne przyłącza wraz ze wstawieniem dodatkowej stu
+RM-2026-012,d56c17ab82e6,R12,R09,zespół,niedostępne urządzenie (agregat),konieczność zmiany strefy przepompowni ze względu na większe gabaryty agregatu o mocy 200va. agregat zaprojektowany w 2019 roku nie jest obecnie dostępny.
+RM-2026-013,588062ac23a8,brak,R07|R02,zespół,ekstremalne opady – brak kategorii w katalogu,"w trakcie budowy sieci kanalizacyjnej wystąpiły w dniach 13-15.09.2024r. ekstremalne warunki pogodowe - bardzo obfite opady deszczu, które spowodowały zniszczen"
+RM-2026-013,0974d61bc048,brak,R07|R02,zespół,ekstremalne opady – brak kategorii w katalogu,"w trakcie budowy sieci kanalizacyjnej wystąpiły w dniach 13-15.09.2024r. ekstremalne warunki pogodowe - bardzo obfite opady deszczu, które spowodowały zniszczen"
+RM-2026-014,6d1ecd3d6051,R02,,zespół,grunt kategorii V–VI,"wystąpienie niesprzyjających warunków gruntowych częściowo odmiennego gruntu, tj. kategorii v i vi (grunt skalny)"
+RM-2026-014,0ff376dab3e7,R02|R07,,zespół,odspojenie gruntu skalnego,wykonanie dodatkowych robót w zakresie odspojenia częściowo odmiennego gruntu skalnego.
+RM-2026-015,cf74c8a30fe2,R01|R07,R09,zespół,zwiększenie zakresu (przepustowość oczyszczalni),"przedłużenie terminu realizacji zadania wynika z konieczności zwiększenia zakresu robót, których wykonanie w sposób obiektywny uniemożliwia terminowe zakończeni"
+RM-2026-015,cffb090c1371,R01|R07,,zespół,roboty nieobjęte dokumentacją PFU,wykonawca zgłosił konieczność wykonania robót dodatkowych nieobjętych pierwotną dokumentacją pfu i warunkami technicznymi: 1) wykonanie dodatkowej płyty żelbeto
+RM-2026-016,7ecca5ef3b3c,R04|R03,R12,zespół,przyłącze nie wykonane przez operatora energetycznego,zmiana terminu wykonani umowy o 1 miesiąc - powodem była konieczność wprowadzenia zmian w dokumentacji technicznej i wdrożenia nowych rozwiązań w zakresie tymcz
+RM-2026-016,ce60c73709ca,R08|R13,,zespół,waloryzacja wynagrodzenia,waloryzacja wynagrodzenia
+RM-2026-017,297079533f14,R07,,zespół,dodatkowy zakres prac,przedłużenie terminu wykonania przedmiotu umowy ze względu na konieczność wykonania dodatkowego zakresu prac
+RM-2026-018,d3587c3a88fa,R07|R01,,zespół,rozszerzenie zakresu,"w toku realizacji umowy wystąpiła potrzeba rozszerzenia zakresu zamówienia , których wykonanie było niezbędne dla prawidłowej i kompletnej realizacji zamówienia"
+RM-2026-019,83f0c83e7283,R07,,zespół,roboty dodatkowe,roboty dodatkowe
+RM-2026-020,a9501bcdfb75,R03,,zespół,służebność przesyłu na działce,konieczność ustanowienia służebności przesyłu na działce nr 3/39 obręb konarzewo
+RM-2026-020,00c3c873b2d2,R02,,zespół,niekorzystne warunki gruntowe i wody gruntowe,w trakcie realizacji prac ziemnych ujawniono niekorzystne warunki gruntowe oraz miejscowy wysoki poziom wód gruntowych. w celu prawidłowego wykonania zamówienia
+RM-2026-021,90354324a935,R03,R04,zespół,kolizja z robotami na rondzie (inna inwestycja),"zmiana konieczna z powodu okoliczności, których zamawiający działający z należytą starannością nie mógł przewidzieć. w związku z z prowadzonymi pracami na teren"
+RM-2026-022,66a2fe98cef8,R07|R01,,zespół,dodatkowe przyłącza,w trakcie realizacji umowy powstała konieczność wykonania robót dodatkowych (zgodnie z protokołem konieczności nr 2/2023 z dnia 28.07.2023r. podpisanym przez za
+RM-2026-022,3656c92a3896,R01|R02,R07,zespół,dokumentacja z 2019 r. nieaktualna wobec stanu osadnictwa,"w trakcie realizacji umowy powstała konieczność wykonania robót dodatkowych, zgodnie z protokołem konieczności nr 1/2023 z dnia 03.07.2023 r. budowa sieci wodoc"
+RM-2026-022,77caf2ef50f7,R07,,zespół,dodatkowe roboty bez głębszej przyczyny,konieczność zlecenia dodatkowych robót dla prawidłowego wykonania podstawowego zakresu i uzyskania świadczenia zgodnego z potrzebami zamawiającego.
+RM-2026-022,ba354ee1365b,R07,,zespół,dodatkowe roboty bez głębszej przyczyny,zlecenie dodatkowych (nie planowanych) robót stało się konieczne dla prawidłowego wykonania podstawowego zakresu i uzyskania świadczenia zgodnego z potrzebami z
+RM-2026-015,9369caae8da9,R01|R07,R09,zespół,zwiększenie zakresu (przepustowość oczyszczalni),"przedłużenie terminu realizacji zadania wynika z konieczności zwiększenia zakresu robót, których wykonanie w sposób obiektywny uniemożliwia terminowe zakończeni"
+RM-2026-015,2e352b3e7553,R01|R07,,zespół,roboty nieobjęte dokumentacją PFU,wykonawca zgłosił konieczność wykonania robót dodatkowych nieobjętych pierwotną dokumentacją pfu i warunkami technicznymi: 1) wykonanie dodatkowej płyty żelbeto

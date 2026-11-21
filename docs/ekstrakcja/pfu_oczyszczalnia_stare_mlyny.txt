@@ -1,0 +1,81 @@
+PRZEDSIĘBIORSTWO WODOCIĄGÓW I KANALIZACJI „CZYSTA RZEKA” SP. Z O.O.
+Dział Techniczny i Inwestycji
+Data: 19.11.2026 r.
+Nr dokumentu: DTI/2026/44
+WSTĘPNY PROGRAM FUNKCJONALNO-UŻYTKOWY
+(ZAŁOŻENIA DO PRZETARGU)
+
+Nazwa zadania: „Modernizacja i rozbudowa gminnej oczyszczalni ścieków w m. Stare Młyny w
+celu zwiększenia przepustowości”
+Podsektor: Oczyszczalnia ścieków
+Kod CPV: 45252100-9 (Zakłady oczyszczania ścieków)
+Tryb: Przetarg nieograniczony, wynagrodzenie kosztorysowe z limitem maksymalnym
+1. Stan istniejący i cel inwestycji
+
+Istniejąca oczyszczalnia ścieków w Starych Młynach (wybudowana w 1998 r.) pracuje obecnie
+na granicy swojej wydajności projektowej wynoszącej 1 200 m³/dobę. W związku z rozbudową
+kanalizacji w sąsiednich wsiach oraz planowanym podłączeniem lokalnej mleczarni, zakład
+często przekracza dopuszczalne normy zrzutu azotu i fosforu do rzeki Młynówki. Celem zadania
+jest zwiększenie przepustowości obiektu do 2 500 m³/dobę oraz poprawa jakości ścieków
+oczyszczonych.
+Warto zaznaczyć, że spółka nie dysponuje obecnie szczegółowymi wynikami badań składu
+ścieków surowych z ostatnich 12 miesięcy (szczególnie w zakresie ładunków przemysłowych z
+mleczarni) – wykonawca ma przyjąć uśrednione parametry typowe dla ścieków bytowych.
+2. Zakres prac i wymagania technologiczne
+
+Inwestycja musi zostać zrealizowana na czynnym obiekcie, przy zachowaniu ciągłości odbioru
+i oczyszczania ścieków (brak możliwości wyłączenia linii technologicznej na dłużej niż 4
+godziny).
+Zakres obejmuje:
+● Budowę nowego reaktora biologicznego oraz osadnika wtórnego.
+● Wymianę dmuchaw, kraty gęstej oraz pomp obiegowych.
+● Wdrożenie systemu automatyki i sterowania SCADA.
+Parametr / Element Wymaganie Uwagi
+zamawiającego
+
+Docelowa przepustowość 2 100 m³/dobę Zgodnie z nową koncepcją
+zarządu
+Dostawa dmuchaw Wyłącznie marki AeroMax Z uwagi na przyzwyczajenie
+napowietrzających Pro-500 obsługi
+
+
+System sterowania SCADA Kompatybilny z obecnym Brak dokumentacji kodów
+systemem z 2008 r. źródłowych starego
+systemu
+
+Zużycie energii elektrycznej „Możliwie najniższe” Brak określonego limitu
+kWh/m³
+
+3. Warunki udziału w postępowaniu i łańcuch dostaw
+
+Aby zapewnić wysoką jakość wykonania, zamawiający wymaga, aby wykonawca w ciągu
+ostatnich 3 lat zrealizował co najmniej 4 modernizacje oczyszczalni ścieków o przepustowości
+powyżej 5 000 m³/dobę, każda na terenie województwa łódzkiego, z wykorzystaniem dokładnie
+tej samej technologii napowietrzania. Termin składania ofert zostanie skrócony do minimum,
+aby zdążyć przed końcem roku budżetowego.
+Kluczowe urządzenia technologiczne (w tym specjalistyczne wirówki do osadu oraz szafy
+sterownicze) są produkowane wyłącznie na indywidualne zamówienie poza UE, a obecny czas
+oczekiwania u producentów wynosi 7–9 miesięcy. Zamawiający nie przewiduje możliwości
+wydłużenia terminu umowy ani waloryzacji cen w przypadku opóźnień w dostawach lub wzrostu
+cen komponentów.
+4. Finansowanie i budżet
+
+Całkowity koszt inwestycji oszacowano na 18 500 000 zł brutto. Finansowanie ma pochodzić z:
+● Środków własnych spółki PWiK: 2 500 000 zł (zabezpieczone na rachunku).
+● Planowanej pożyczki z WFOŚiGW: 6 000 000 zł (wniosek jeszcze nie został złożony).
+● Dotacji z funduszy UE (FEnIKS): 10 000 000 zł (nabór jeszcze nie został ogłoszony,
+spółka zakłada uzyskanie 100% wnioskowanej kwoty).
+W przypadku braku uzyskania dotacji UE w trakcie trwania robót, zamawiający zastrzega sobie
+prawo do jednostronnego wstrzymania płatności faktur częściowych do czasu znalezienia
+innego źródła finansowania, bez prawa wykonawcy do odsetek lub odstąpienia od umowy.
+5. Harmonogram, rozruch i odbiór końcowy
+
+● Planowane podpisanie umowy: 1 lutego 2027 r.
+● Zakończenie robót budowlanych i montażowych: 30 listopada 2027 r. (10 miesięcy).
+● Rozruch technologiczny: 7 dni kalendarzowych (w grudniu 2027 r., bez względu na
+temperatury zimowe).
+Odbiór końcowy nastąpi po potwierdzeniu przez wykonawcę, że „oczyszczalnia działa
+poprawnie i nie emituje uciążliwych zapachów”. Nie określono liczby wymaganych próbek
+ścieków, laboratorium wykonującego badania ani procedury postępowania w przypadku
+nieosiągnięcia parametrów środowiskowych podczas rozruchu w okresie zimowym.
+○

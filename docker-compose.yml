@@ -1,0 +1,30 @@
+# Uruchomienie jednym poleceniem:   docker compose up -d --build
+# Aplikacja: http://localhost:8000 (inny port: RISKMINER_PORT=9000 docker compose up -d)
+services:
+  riskminer:
+    build: .
+    image: riskminer:latest
+    ports:
+      - "${RISKMINER_PORT:-8000}:8000"
+    volumes:
+      # SQLite i cache BZP/BIP – przetrwają restart oraz down/up
+      - riskminer-data:/data
+      # Model Bielik-11B GGUF (~6,7 GB) wspólny z uruchomieniem bez kontenera: katalog data/llm na hoście.
+      # Gdy pliku brak, aplikacja pobierze go tu przy pierwszej analizie LLM (przypięta wersja + SHA-256).
+      - ${RISKMINER_MODELS:-./data/llm}:/data/llm
+      # Arkusz organizatora z paczki „materialy_dla_uczestnikow” (katalog wyżej); tylko do odczytu
+      - ${RISKMINER_XLSX:-../Risk_Miner_dane_projekty.xlsx}:/import/Risk_Miner_dane_projekty.xlsx:ro
+    environment:
+      RISKMINER_AUTOIMPORT: "1"   # przy pustej bazie zaimportuj arkusz przy starcie
+      # Kontener nie ma dostępu do GPU Maca – model liczy na CPU. Mniejszy kontekst mieści się w 8 GB pamięci Dockera.
+      LLM_GPU_LAYERS: "0"
+      LLM_CONTEXT: "${LLM_CONTEXT:-4096}"
+      LLM_PROVIDER:
+      LLM_MODEL:
+      LLM_MODEL_PATH:
+      LLM_API_KEY:
+      OLLAMA_BASE_URL:
+    restart: unless-stopped
+
+volumes:
+  riskminer-data:

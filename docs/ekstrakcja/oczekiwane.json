@@ -1,0 +1,133 @@
+{
+  "_opis": "Zbiór testowy odczytu cech z dokumentów. Dla każdego pliku: oczekiwane wartości (lista = każda z nich jest poprawna). 'konflikt': true – poprawnym wynikiem jest też pokazanie wyboru, w którym jest oczekiwana wartość. 'ograniczenia' – kategorie, które powinny zostać rozpoznane (recall). Dodawaj kolejne dokumenty: plik .txt + wpis tutaj, potem: python cli.py eval-extract.",
+  "dokumenty": [
+    {
+      "plik": "koncepcja_wodociag_zielony_gaj.txt",
+      "subsector_main": [
+        "Sieć wodociągowa"
+      ],
+      "formula": [
+        "zaprojektuj i wybuduj"
+      ],
+      "remuneration": [
+        "ryczałtowe"
+      ],
+      "budget_pln": {
+        "wartosc": [
+          4500000
+        ],
+        "konflikt": true
+      },
+      "length_km": {
+        "wartosc": [
+          3.5,
+          4.2
+        ],
+        "konflikt": true
+      },
+      "connections": {
+        "wartosc": [
+          35
+        ]
+      },
+      "duration_months": {
+        "wartosc": [
+          9
+        ]
+      },
+      "ograniczenia": [
+        "grunty prywatne / dostęp do terenu",
+        "decyzja środowiskowa / ochrona przyrody",
+        "pozwolenie wodnoprawne / odbiornik ścieków",
+        "warunki gruntowo-wodne",
+        "nieustalony operator / podział odpowiedzialności",
+        "wynagrodzenie ryczałtowe przy niepewnym zakresie",
+        "brak procedur prób, rozruchu i odbioru"
+      ]
+    },
+    {
+      "plik": "pfu_oczyszczalnia_stare_mlyny.txt",
+      "subsector_main": [
+        "Oczyszczalnia ścieków"
+      ],
+      "remuneration": [
+        "kosztorysowe"
+      ],
+      "budget_pln": {
+        "wartosc": [
+          18500000
+        ]
+      },
+      "flow_m3d": {
+        "wartosc": [
+          2500,
+          2100
+        ],
+        "konflikt": true
+      },
+      "duration_months": {
+        "wartosc": [
+          10
+        ]
+      },
+      "ograniczenia": [
+        "istniejący obiekt w eksploatacji",
+        "długi czas dostaw / dostępność urządzeń",
+        "niepewne finansowanie",
+        "zawężające warunki udziału lub wskazanie marki",
+        "brak procedur prób, rozruchu i odbioru"
+      ]
+    },
+    {
+      "plik": "aneks_termin_zagrodno.txt",
+      "subsector_main": [
+        "Kanalizacja sanitarna"
+      ],
+      "deadline_days": {
+        "wartosc": [
+          30,
+          31
+        ]
+      },
+      "ograniczenia": [
+        "kolizje i istniejące uzbrojenie",
+        "warunki gruntowo-wodne",
+        "nierealny harmonogram / zależność od innej inwestycji"
+      ]
+    },
+    {
+      "plik": "protokol_koniecznosci_zlawies.txt",
+      "subsector_main": [
+        "Uzdatnianie i zaopatrzenie w wodę",
+        "Kanalizacja sanitarna"
+      ],
+      "extra_cost": {
+        "wartosc": [
+          151481.54
+        ]
+      },
+      "deadline_days": {
+        "wartosc": [
+          36
+        ]
+      },
+      "ograniczenia": [
+        "azbest / stan istniejących sieci"
+      ]
+    },
+    {
+      "plik": "pismo_termin_grodzisko_ocr.txt",
+      "_zrodlo": "skan PDF, tekst z OCR (Tesseract, pol)",
+      "subsector_main": [
+        "Kanalizacja sanitarna"
+      ],
+      "deadline_date": [
+        "31.12.2025"
+      ],
+      "ograniczenia": [
+        "grunty prywatne / dostęp do terenu",
+        "nieaktualna dokumentacja projektowa"
+      ]
+    }
+  ]
+}
