@@ -5,7 +5,7 @@ import re
 
 import requests
 
-from . import config, db, risks
+from . import config, db, local_model, risks
 
 
 class ModelError(Exception):
@@ -37,6 +37,28 @@ def output_schema(n_excerpts):
             "properties": {"wynik": {"anyOf": [finding, {"type": "null"}]}}}
 
 
+def _remote_completion(provider, model, messages, schema):
+    if provider == "anthropic":
+        if not config.LLM_API_KEY:
+            raise ModelError("Ustaw LLM_API_KEY w środowisku backendu.")
+        response = requests.post("https://api.anthropic.com/v1/messages", timeout=(5, 90),
+            headers={"x-api-key": config.LLM_API_KEY, "anthropic-version": "2023-06-01"},
+            json={"model": model, "max_tokens": 1024, "system": INSTRUCTIONS,
+                  "messages": messages[1:]}, allow_redirects=False)
+    elif provider == "ollama":
+        response = requests.post(config.OLLAMA_BASE_URL.rstrip("/") + "/api/chat", timeout=(5, 120),
+            json={"model": model, "stream": False, "format": schema,
+                  "messages": messages}, allow_redirects=False)
+    else:
+        raise ModelError("LLM_PROVIDER musi mieć wartość anthropic, ollama lub llama.cpp.")
+    if response.status_code != 200:
+        raise ModelError(f"{provider} zwrócił HTTP {response.status_code}. Sprawdź konfigurację dostawcy.")
+    body = response.json()
+    if provider == "anthropic":
+        return "".join(block["text"] for block in body["content"] if block["type"] == "text")
+    return body["message"]["content"]
+
+
 def infer(fragment, context):
     excerpts = re.split(r"(?<=[.!?;])\s+(?=[A-ZĄĆĘŁŃÓŚŹŻ])", fragment.strip())
     hints = {code: risks.NAMES[code] for code, _ in risks.propose(fragment)}
@@ -46,33 +68,12 @@ def infer(fragment, context):
     provider, model = config.LLM_PROVIDER, config.LLM_MODEL
     if not model:
         raise ModelError("Ustaw LLM_MODEL na nazwę dostępnego modelu.")
+    schema = output_schema(len(excerpts))
     try:
-        if provider == "anthropic":
-            if not config.LLM_API_KEY:
-                raise ModelError("Ustaw LLM_API_KEY w środowisku backendu.")
-            response = requests.post("https://api.anthropic.com/v1/messages", timeout=(5, 90),
-                headers={"x-api-key": config.LLM_API_KEY, "anthropic-version": "2023-06-01"},
-                json={"model": model, "max_tokens": 1024, "system": INSTRUCTIONS,
-                      "messages": [{"role": "user", "content": prompt}]}, allow_redirects=False)
-        elif provider == "ollama":
-            response = requests.post(config.OLLAMA_BASE_URL.rstrip("/") + "/api/chat", timeout=(5, 120),
-                json={"model": model, "stream": False, "format": output_schema(len(excerpts)),
-                      "messages": messages}, allow_redirects=False)
-        elif provider == "llama.cpp":
-            response = requests.post(config.LLAMA_BASE_URL.rstrip("/") + "/v1/chat/completions", timeout=(5, 120),
-                json={"model": model, "messages": messages, "temperature": 0, "max_tokens": 512,
-                      "response_format": {"type": "json_object", "schema": output_schema(len(excerpts))}}, allow_redirects=False)
+        if provider == "llama.cpp":
+            raw = local_model.complete(messages, schema)
         else:
-            raise ModelError("LLM_PROVIDER musi mieć wartość anthropic, ollama lub llama.cpp.")
-        if response.status_code != 200:
-            raise ModelError(f"{provider} zwrócił HTTP {response.status_code}. Sprawdź konfigurację dostawcy.")
-        body = response.json()
-        if provider == "anthropic":
-            raw = "".join(block["text"] for block in body["content"] if block["type"] == "text")
-        elif provider == "llama.cpp":
-            raw = body["choices"][0]["message"]["content"]
-        else:
-            raw = body["message"]["content"]
+            raw = _remote_completion(provider, model, messages, schema)
         result = json.loads(raw)["wynik"]
         if result is None:
             return None
@@ -82,6 +83,8 @@ def infer(fragment, context):
         if code not in risks.NAMES or type(index) is not int or not 1 <= index <= len(excerpts):
             raise ValueError()
         return code, cause.strip(), excerpts[index - 1]
+    except local_model.LocalModelError as exc:
+        raise ModelError(str(exc)) from exc
     except requests.RequestException as exc:
         raise ModelError(f"Błąd połączenia z dostawcą {provider}.") from exc
     except (ValueError, TypeError, KeyError, IndexError) as exc:
@@ -100,8 +103,10 @@ def analyze_project(con, pid):
         if source["event_type"] == "dokument BIP":
             context += " " + (source["details"] or "")
         fragment = source["quote"]
-        signature = hashlib.sha256(db.dumps([config.LLM_PROVIDER, config.LLM_MODEL, INSTRUCTIONS,
-                                            context, fragment]).encode()).hexdigest()
+        inputs = [config.LLM_PROVIDER, config.LLM_MODEL, INSTRUCTIONS, context, fragment]
+        if config.LLM_PROVIDER == "llama.cpp":
+            inputs.append(["embedded", str(config.LLM_MODEL_PATH)])
+        signature = hashlib.sha256(db.dumps(inputs).encode()).hexdigest()
         cached = con.execute("""SELECT r.signature, e.status FROM llm_run r
                 LEFT JOIN event e ON e.id=r.proposal_id WHERE r.source_id=?""", (source["id"],)).fetchone()
         if cached and (cached["signature"] == signature or cached["status"] in

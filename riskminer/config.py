@@ -24,9 +24,10 @@ BZP_SEARCH_CACHE_TTL_H = float(os.environ.get("BZP_SEARCH_CACHE_TTL_H", "24"))
 BZP_MAX_ORG_PAGES = int(os.environ.get("BZP_MAX_ORG_PAGES", "25"))
 
 # Analiza przyczyn i kategorii ryzyka na żądanie.
-LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "anthropic")
-LLM_MODEL = os.environ.get("LLM_MODEL", "claude-sonnet-5-5")
-LLAMA_BASE_URL = os.environ.get("LLAMA_BASE_URL", "http://127.0.0.1:8081")
+LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "llama.cpp")
+LLM_MODEL = os.environ.get("LLM_MODEL", {"llama.cpp": "qwen2.5-1.5b-instruct",
+                                         "anthropic": "claude-sonnet-5-5"}.get(LLM_PROVIDER, ""))
+LLM_MODEL_PATH = Path(os.environ.get("LLM_MODEL_PATH", DATA_DIR / "llm" / "qwen.gguf"))
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
 

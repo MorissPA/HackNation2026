@@ -36,26 +36,19 @@ Konfiguracja przez zmienne środowiskowe ([riskminer/config.py](riskminer/config
 | `BZP_MIN_INTERVAL_S` | `2.2` | odstęp między zapytaniami do oficjalnego API BZP (limit 30/min) |
 | `BZP_OFFICIAL_ORG_SCAN` | `0` | `1` = przy włączonej kopii i tak rób pełny przegląd ogłoszeń zamawiającego w oficjalnym API |
 | `BZP_SEARCH_CACHE_TTL_H` | `24` | ważność cache wyszukiwarki; treść ogłoszeń jest cache'owana bez limitu |
-| `LLM_PROVIDER` / `LLM_MODEL` / `LLM_API_KEY` | – | dostawca, model i klucz backendu. Przykłady w [llm.env.example](llm.env.example) |
+| `LLM_PROVIDER` / `LLM_MODEL` / `LLM_API_KEY` | llama.cpp / Qwen lokalnie | dostawca, model i klucz backendu. Przykłady w [llm.env.example](llm.env.example) |
 
 ## Analiza przyczyn przez model językowy
 
 W karcie projektu wybierz **Analizuj przyczyny i ryzyka przez LLM**. Równoważne polecenie CLI:
 
 ```bash
-set -a
-source llm.env.example
-set +a
 .venv/bin/python cli.py llm RM-2026-003
 ```
 
-Przykład korzysta z lokalnego [llama.cpp](https://github.com/ggml-org/llama.cpp) i [Qwen2.5-1.5B-Instruct Q4_K_M](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF). Serwer uruchom w osobnym terminalu. Poniższe ścieżki zakładają plik GGUF i rozpakowaną dystrybucję macOS arm64 w katalogu danych:
+Domyślnie backend wykonuje analizę w swoim procesie za pomocą biblioteki `llama-cpp-python`. Przy pierwszej analizie wymagającej modelu aplikacja korzysta z pliku `data/llm/qwen.gguf`. Jeśli go brakuje, pobiera około 1,12 GB i sprawdza sumę SHA-256. Kolejne analizy działają lokalnie, również offline. Wagi pochodzą z [oficjalnego wydania Qwen2.5-1.5B-Instruct Q4_K_M](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF).
 
-```bash
-data/llm/build/bin/llama-server -m data/llm/qwen.gguf --alias qwen2.5-1.5b-instruct --host 127.0.0.1 --port 8081 -c 4096 -ngl 0 --device none
-```
-
-Ustaw zmienne przed uruchomieniem backendu lub CLI. Dostępne są także Ollama i Anthropic Messages API. Dla Anthropic ustaw własny klucz i nazwę modelu dostępną na koncie.
+Własny plik GGUF można wskazać przez `LLM_MODEL_PATH` i opisać przez `LLM_MODEL`. Opcjonalne ustawienia Ollamy i Anthropic znajdują się w [llm.env.example](llm.env.example).
 
 Model dostaje katalog R01–R15, kontekst zdarzenia i zapisany fragment dowodowy zmiany umowy lub dokumentu BIP. Przy odrzuconym powiązaniu BIP dokument jest pomijany. Model proponuje jedną główną kategorię i przyczynę albo wskazuje brak podstaw. Aplikacja pobiera cytat ze wskazanego przez model fragmentu oraz zapisuje numer źródła, adres i sekcję. Trafność interpretacji ocenia ekspert w dotychczasowym panelu. Zakres analizy ogranicza się do fragmentów już wydobytych na kartę projektu.
 

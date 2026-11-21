@@ -230,6 +230,7 @@ function ModelAnalysis({ pid, onReviewed }: ReviewProps) {
   }
   return <div>
     <button className="btn" disabled={busy} onClick={analyze}>{busy ? <Spinner /> : null} Analizuj przyczyny i ryzyka przez LLM</button>
+    {busy && <p role="status">Trwa analiza. Przy pierwszym użyciu modelu lokalnego aplikacja może pobrać około 1,12 GB.</p>}
     {message && <p role="status">{message}</p>}
     {error && <ErrorBox error={error} />}
   </div>;
