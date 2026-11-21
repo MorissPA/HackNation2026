@@ -109,7 +109,7 @@ function Checklist({ items }: { items: ChkItem[] }) {
   );
 }
 
-export function AnalysisView() {
+export function AnalysisView({ minChars }: { minChars?: number }) {
   const toast = useToast();
   const [text, setText] = useState(EXAMPLES[0].text);
   const [result, setResult] = useState<Row | null>(null);
@@ -123,7 +123,7 @@ export function AnalysisView() {
     catch (e) { toast((e as Error).message, true); } finally { setBusy(false); }
   };
   const exp = async (format: "csv" | "json") => {
-    try { download(await api.exportAnalysis(result?.input_text ?? text, format), `risk_miner_analiza.${format}`); toast(`Wyeksportowano analizę do pliku ${format.toUpperCase()}.`); }
+    try { download(await api.exportAnalysis(result?.input_text ?? text, format, result?.choices), `risk_miner_analiza.${format}`); toast(`Wyeksportowano analizę do pliku ${format.toUpperCase()}.`); }
     catch (e) { toast((e as Error).message, true); }
   };
   const f = result?.features;
@@ -151,7 +151,8 @@ export function AnalysisView() {
           {EXAMPLES.map((e) => <button key={e.label} className="link" onClick={() => { setText(e.text); setResult(null); setFile(null); }}>{e.label}</button>)}</div>
         <div>
           <label htmlFor="analysis-text" className="lbl">Opis zakresu, lokalizacji, szacowanego budżetu oraz terminu</label>
-          <textarea id="analysis-text" rows={5} className="field" value={text} onChange={(e) => setText(e.target.value)}
+          {minChars && <span className="caption">Opis musi mieć co najmniej {minChars} znaków.</span>}
+          <textarea id="analysis-text" rows={5} className="field" value={text} onChange={(e) => { setText(e.target.value); setResult(null); }}
             placeholder="Wpisz opis planowanej inwestycji wodociągowej lub kanalizacyjnej…" />
         </div>
         <div className="input-foot">
@@ -162,7 +163,7 @@ export function AnalysisView() {
           </label>
           <span className="row">
             {busy ? <><Spinner /><span className="caption">Analizuję…</span></> : null}
-            <button className="btn btn-primary" disabled={busy || text.trim().length < 20} onClick={() => run(() => api.analyze(text))}>Analizuj inwestycję</button>
+            <button className="btn btn-primary" disabled={busy || !minChars || Array.from(text.trim()).length < minChars} onClick={() => run(() => api.analyze(text))}>Analizuj inwestycję</button>
           </span>
         </div>
       </div>
@@ -177,6 +178,17 @@ export function AnalysisView() {
                 <button className="btn btn-sm" onClick={() => exp("csv")}>Eksportuj CSV</button>
               </span>
             </div>
+            {Object.entries(f.conflicts as Record<string, Row[]>).map(([key, options]) => (
+              <div className="gap" key={key}>
+                <p>Wybierz {key === "budget_pln" ? "budżet inwestycji" : "długość całej sieci"}, aby obliczyć prognozę.</p>
+                {options.map((option, index) => (
+                  <p key={index}><button className="btn btn-sm" disabled={busy}
+                    onClick={() => run(() => api.analyze(text, { ...result.choices, [key]: option.value }))}>
+                    {key === "budget_pln" ? pln(option.value) : num(option.value) + " km"}
+                  </button> „{option.source}”</p>
+                ))}
+              </div>
+            ))}
             <div className="kpis">
               <div className="kpi">
                 <div className="kpi-l">Próba porównawcza</div>
@@ -218,7 +230,7 @@ export function AnalysisView() {
               {sub === "risks" && (result.flags.length
                 ? <div style={{ display: "grid", gap: 14 }}>{result.flags.map((fl: Row) => <RiskCard key={fl.code} fl={fl} nSimilar={similar.length} />)}</div>
                 : <div className="panel empty-state"><div className="panel-title">Brak flag ryzyka</div>
-                    <p className="panel-sub">Podobne przypadki nie mają zdarzeń ryzyka, a opis nie wskazuje znanych ograniczeń.</p></div>)}
+                    <p className="panel-sub">{similar.length ? "W porównanych projektach i w opisie nie znaleziono sygnału ryzyka." : "Brak porównywalnych projektów do oceny ryzyka."}</p></div>)}
 
               {sub === "checklist" && (
                 <div style={{ display: "grid", gap: 10 }}>

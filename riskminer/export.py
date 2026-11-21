@@ -54,7 +54,7 @@ def to_json(con) -> dict:
            "opis_tabel": {k: v[1] for k, v in TABLES.items()}, "projekty": []}
     for p in _rows(con, TABLES["projekty"][0]):
         pid = p["project_id"]
-        links = _rows(con, "SELECT ocid, part_no, method, score, status, evidence FROM project_link WHERE project_id=?", (pid,))
+        links = _rows(con, "SELECT ocid, part_no, method, score, status, evidence FROM active_project_link WHERE project_id=?", (pid,))
         for l in links:
             l["postepowanie"] = (_rows(con, "SELECT * FROM procedure WHERE ocid=?", (l["ocid"],)) or [None])[0]
             l["ogloszenia"] = _rows(con, "SELECT notice_number, notice_type, publication_date, order_object, source_url "

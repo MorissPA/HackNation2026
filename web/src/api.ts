@@ -5,7 +5,7 @@ export type Row = Record<string, any>;
 
 export interface Stats {
   projects: number; fetched: number; links_confirmed: number; links_proposed: number;
-  proposals_open: number; sample_available: boolean; llm_model?: string;
+  analysis_min_chars: number; proposals_open: number; sample_available: boolean; llm_model?: string;
 }
 export interface Feature { name: string; status: string; detail: string }
 export interface Candidate {
@@ -31,7 +31,8 @@ export interface QueueItem {
   event_id?: number; code?: string; title?: string; origin?: string; details?: string; date?: string | null;
   source_notice?: string | null; source_url?: string | null; source_section?: string | null; notice_label?: string | null;
   quote?: string | null; before?: string | null; after?: string | null; llm_confidence?: string | null;
-  impact?: { label: string; value_num: number; unit: string }[];
+  event_effect_quote?: string | null;
+  contract_context?: { label: string; value_num: number; unit: string }[];
   // powiązanie
   ocid?: string; confidence?: string | null; matched?: number | null; checked?: number | null; evidence?: string;
   candidates?: Candidate[];
@@ -77,14 +78,14 @@ export const api = {
     method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) }),
   analyzeRisks: (id: string) =>
     post<{sources: number; created: number; cached: number; abstained: number}>(`/api/projects/${encodeURIComponent(id)}/llm`),
-  analyze: (text: string) => post<Row>("/api/analysis", { text }),
+  analyze: (text: string, choices?: Record<string, number>) => post<Row>("/api/analysis", { text, choices }),
   analyzeFile: (file: File) => {
     const fd = new FormData(); fd.append("file", file);
     return call<Row>("/api/analysis/file", { method: "POST", body: fd });
   },
-  exportAnalysis: async (text: string, format: "csv" | "json") => {
+  exportAnalysis: async (text: string, format: "csv" | "json", choices?: Record<string, number>) => {
     const res = await fetch(`/api/analysis/export?format=${format}`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, choices }) });
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
     return res.blob();
   },

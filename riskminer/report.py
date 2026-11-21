@@ -42,7 +42,7 @@ def link_rows(con):
     rows = []
     for p in con.execute("SELECT * FROM project ORDER BY project_id"):
         p = dict(p)
-        link = con.execute("SELECT * FROM project_link WHERE project_id=? AND status<>'odrzucone'", (p["project_id"],)).fetchone()
+        link = con.execute("SELECT * FROM active_project_link WHERE project_id=?", (p["project_id"],)).fetchone()
         r = {"project_id": p["project_id"], "name": p["name"], "id_type": p["public_id_type"], "public_id": p["public_id"],
              "scope": p["scope"], "method": link["method"] if link else None, "link_status": link["status"] if link else None,
              "ocid": link["ocid"] if link else None, "checks": [], "problems": [], "uncertain": [], "data_notes": []}
@@ -104,7 +104,7 @@ def build(con):
         a = analysis.analyze(con, text)
         analyses[label] = {
             "similar": [(s["project_id"], s["name"], s["matched"], s["checked"]) for s in a["similar"]],
-            "confidence": a["comparison"].get("confidence", {}).get("level"),
+            "confidence": (a["comparison"].get("confidence") or {}).get("level", "brak podstaw"),
             "growth": a["comparison"]["growth_pct"], "delay": a["comparison"]["delay_days"],
             "flags": [(f["code"], f["name"], f["strength"], f["action"]) for f in a["flags"][:4]],
         }

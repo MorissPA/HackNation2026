@@ -149,7 +149,7 @@ def import_file(con, filename: str, content: bytes) -> dict:
             rec["part_no"] = parse_part_no(rec.get("scope"))
             raw_json = db.dumps(rec)
             existing = con.execute(
-                "SELECT raw_json FROM project WHERE project_id=?", (rec["project_id"],)
+                "SELECT * FROM project WHERE project_id=?", (rec["project_id"],)
             ).fetchone()
             ts = db.now()
             if existing is None:
@@ -161,6 +161,11 @@ def import_file(con, filename: str, content: bytes) -> dict:
             if status != "bez_zmian":
                 row = dict(rec, raw_json=raw_json, source_file=filename, source_row=row_no,
                            created_at=ts, updated_at=ts)
+                if existing and "BZP" in (existing["public_id_type"] or "").upper() and any(
+                        key in rec and existing[key] != rec[key] for key in
+                        ("public_id", "public_id_type", "name", "recipient_id", "recipient_id_type", "part_no")):
+                    db.retire_bzp_links(con, rec["project_id"])
+                    row.update(last_fetch_status=None, last_fetch_message=None, last_fetch_at=None)
                 db.upsert(con, "project", row, ["project_id"], preserve=("created_at",))
             counts[status] += 1
             msg = "; ".join(warnings) if warnings else None

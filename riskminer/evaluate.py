@@ -44,7 +44,7 @@ def load_gold(con, path=GOLD):
                     "label": r.get("etykieta") or "zespół", "why": r.get("uzasadnienie") or ""}
     # decyzje eksperta mają pierwszeństwo nad etykietą zespołu
     for r in con.execute("""SELECT s.project_id, s.quote, e.status, COALESCE(e.expert_title, e.title) AS t
-            FROM llm_run l JOIN event s ON s.id=l.source_id JOIN event e ON e.id=l.proposal_id
+            FROM llm_run l JOIN visible_event s ON s.id=l.source_id JOIN visible_event e ON e.id=l.proposal_id
             WHERE e.status IN ('zaakceptowane','poprawione')"""):
         gold[(r["project_id"], text_key(r["quote"]))] = {
             "expected": {r["t"].split()[0]}, "partial": set(), "label": "ekspert", "why": f"decyzja eksperta: {r['status']}"}

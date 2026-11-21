@@ -130,7 +130,7 @@ def fetch_project(con, project_id: str, client: BZPClient, log=print) -> dict:
 
     try:
         summary = _run(con, client, card, p, log)
-        status, msg = "ok", summary.get("message", "")
+        status, msg = summary.get("status", "ok"), summary.get("message", "")
     except BZPError as e:
         status, msg, summary = "błąd", f"BZP: {e}", {}
         card.gap("bzp_error", msg)
@@ -139,8 +139,9 @@ def fetch_project(con, project_id: str, client: BZPClient, log=print) -> dict:
     for table in ("fact", "event"):
         preserve_llm = " AND event_type<>'ryzyko LLM'" if table == "event" else ""
         con.execute(f"""DELETE FROM {table} WHERE project_id=? AND updated_at<? AND status='do_weryfikacji'{preserve_llm}
-                    AND ((source_notice LIKE 'BIP: %' AND ?) OR (source_notice NOT LIKE 'BIP: %' AND ?))""",
-                    (project_id, card.ts, bip_complete, status == "ok"))
+                    AND ((source_notice LIKE 'BIP: %' AND ?) OR
+                         (source_notice NOT LIKE 'BIP: %' AND ? AND (ocid IS NULL OR ocid=?)))""",
+                    (project_id, card.ts, bip_complete, status == "ok", summary.get("ocid")))
     con.execute(
         "UPDATE project SET last_fetch_at=?, last_fetch_status=?, last_fetch_message=? WHERE project_id=?",
         (db.now(), status, msg, project_id),
@@ -154,16 +155,44 @@ def _bzp_base(con, client, card, p, log):
     pid = (p.get("public_id") or "").strip()
     log(f"[{p['project_id']}] Szukam ogłoszenia {pid} w BZP…")
     base = client.find_by_number(pid)
-    if base:
-        return {"base": base, "since": None, "method": "numer_bzp", "status": "potwierdzone", "score": 1.0,
-                "evidence": f"Ogłoszenie {base['noticeNumber']} z arkusza → identyfikator postępowania {base['tenderId']}."}
-    log(f"[{p['project_id']}] API nie zwraca {pid}; szukam ogłoszeń zamawiającego, które cytują ten numer…")
-    base, ctx = client.find_via_references(pid, p.get("name"), nip=p.get("recipient_id"),
-                                           org_name=p.get("recipient_name"))
+    direct = bool(base)
+    if not direct:
+        log(f"[{p['project_id']}] Szukam odwołania do numeru {pid}…")
+        base, ctx = client.find_via_references(pid, p.get("name"), nip=p.get("recipient_id"),
+                                               org_name=p.get("recipient_name"))
     if not base:
         card.gap("bzp_not_found", f"Nie znaleziono ogłoszenia {pid} w BZP ani ogłoszeń, które się do niego "
                                   f"odwołują ({ctx}).")
-        return {"message": f"Nie znaleziono {pid}"}
+        return {"message": f"Nie znaleziono {pid}", "status": "do_weryfikacji"}
+    nip = _digits(p.get("recipient_id"))
+    notice_nip = _digits(base.get("organizationNationalId"))
+    title = base.get("orderObject") or ""
+    places = matcher.places(p.get("name"))
+    sectors = matcher.subsectors(p.get("name"))
+    notice_sectors = matcher.subsectors(title)
+    scope_conflict = sectors and notice_sectors and sectors.isdisjoint(notice_sectors)
+    town_matches = all(matcher.stem(place) in title.lower() for place in places)
+    if len(nip) != 10 or nip != notice_nip:
+        reason = f"NIP w arkuszu {nip or '—'}, NIP w ogłoszeniu {notice_nip or '—'}"
+    elif not signals.similar_title(p.get("name"), title) or not town_matches or scope_conflict:
+        reason = f"niezgodny zakres lub lokalizacja zamówienia „{title}”"
+    else:
+        reason = None
+    if reason:
+        db.retire_bzp_links(con, p["project_id"])
+        message = f"Numer {pid} wymaga weryfikacji: {reason}."
+        card.gap("bzp_do_weryfikacji", message)
+        return {"message": message, "status": "do_weryfikacji"}
+    db.retire_bzp_links(con, p["project_id"], keep_ocid=base["tenderId"])
+    previous = con.execute("SELECT status FROM project_link WHERE project_id=? AND ocid=?",
+                           (p["project_id"], base["tenderId"])).fetchone()
+    if previous and previous["status"] == "odrzucone":
+        message = f"Powiązanie {pid} zostało odrzucone przez eksperta."
+        card.gap("bzp_odrzucone", message)
+        return {"message": message, "status": "do_weryfikacji"}
+    if direct:
+        return {"base": base, "since": None, "method": "numer_bzp", "status": "potwierdzone", "score": 1.0,
+                "evidence": f"Ogłoszenie {base['noticeNumber']} z arkusza → identyfikator postępowania {base['tenderId']}."}
     card.gap("brak_ogloszenia_bazowego",
              f"Treść ogłoszenia o zamówieniu {pid} jest niedostępna w API BZP – powiązanie ustalono przez "
              f"odwołanie w ogłoszeniu {base['noticeNumber']}. Brak danych z ogłoszenia bazowego "
@@ -264,7 +293,7 @@ def _run(con, client, card: Card, p: dict, log):
     else:
         found = _kpo_base(con, client, card, p, log)
     if found.get("message"):
-        return {"message": found["message"]}
+        return found
     base, since, method = found["base"], found["since"], found["method"]
     link_evidence, link_status, link_score = found["evidence"], found["status"], found["score"]
 
@@ -285,6 +314,17 @@ def _run(con, client, card: Card, p: dict, log):
     for n in notices:
         by_type.setdefault(n["notice_type"], []).append(n)
 
+    base_n = next((n for n in notices if n["notice_number"] == base["noticeNumber"]), None)
+    result = (by_type.get("TenderResultNotice") or [None])[-1]
+    part = p.get("part_no")
+    if "BZP" in pid_type.upper() and part and (not result or part not in result["ext"]["by_part"]):
+        db.retire_bzp_links(con, p["project_id"])
+        message = f"Nie potwierdzono części {part} w ogłoszeniu o wyniku dla {ocid}."
+        card.gap("bzp_czesc_do_weryfikacji", message)
+        return {"status": "do_weryfikacji", "message": message}
+
+    con.execute("""UPDATE project_link SET status=? WHERE project_id=? AND ocid=? AND status='nieaktualne'""",
+                (link_status, p["project_id"], ocid))
     db.upsert(con, "project_link", {
         "project_id": p["project_id"], "ocid": ocid, "part_no": p.get("part_no") or 0, "method": method,
         "score": link_score,
@@ -292,8 +332,6 @@ def _run(con, client, card: Card, p: dict, log):
         "status": link_status, "created_at": card.ts, "updated_at": card.ts,
     }, ["project_id", "ocid"], preserve=("status", "created_at"))
 
-    base_n = next((n for n in notices if n["notice_number"] == base["noticeNumber"]), None)
-    result = (by_type.get("TenderResultNotice") or [None])[-1]
     _procedure(con, card, p, ocid, base_n, result)
     contracts = _contracts(con, card, p, ocid, result, by_type)
     _timeline_and_risks(con, card, p, ocid, base_n, by_type, contracts)

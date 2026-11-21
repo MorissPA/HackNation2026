@@ -80,7 +80,7 @@ def decide_category(con, code: str, action: str, comment: str = None, author="ek
 
 
 def _current_link(con, pid):
-    return con.execute("SELECT * FROM project_link WHERE project_id=? AND status<>'odrzucone'", (pid,)).fetchone()
+    return con.execute("SELECT * FROM active_project_link WHERE project_id=?", (pid,)).fetchone()
 
 
 def confirm_link(con, pid: str, ocid: str, comment: str = None, refetch=True, author="ekspert"):

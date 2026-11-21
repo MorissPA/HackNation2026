@@ -171,11 +171,17 @@ def evidence_for_project(con, project, log=lambda m: None):
     rel_rx = "|".join(SCOPE[s] for s in related) or r"(?!)"
 
     # Uwzględnij identyfikatory tylko dla aktywnych powiązań i właściwej części.
-    terms = [(project["public_id"], "identyfikator z arkusza")] if project.get("public_id") else []
-    for row in con.execute("""SELECT l.ocid, n.notice_number, c.contractor_name FROM project_link l
+    terms = []
+    public_id = project.get("public_id")
+    if public_id and ("BZP" not in (project.get("public_id_type") or "").upper() or con.execute(
+            "SELECT 1 FROM active_project_link l WHERE project_id=? AND status='potwierdzone' AND "
+            "(instr(l.evidence, ?) > 0 OR EXISTS (SELECT 1 FROM notice n WHERE n.ocid=l.ocid AND n.notice_number=?))",
+            (project["project_id"], public_id, public_id)).fetchone()):
+        terms.append((public_id, "identyfikator z arkusza"))
+    for row in con.execute("""SELECT l.ocid, n.notice_number, c.contractor_name FROM active_project_link l
             LEFT JOIN notice n ON l.ocid=n.ocid LEFT JOIN contract c ON c.ocid=l.ocid
             AND (l.part_no=0 OR c.part_no=l.part_no)
-            WHERE l.project_id=? AND l.status<>'odrzucone'""", (project["project_id"],)):
+            WHERE l.project_id=?""", (project["project_id"],)):
         terms.extend(zip(row, ("OCID", "numer BZP", "wykonawca")))
     identifiers = {}
     for value, label in terms:

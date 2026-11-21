@@ -20,7 +20,7 @@ from .bzp import parser as P
 # ---------------------------------------------------------------- taksonomia organizatora (podsektory)
 SUBSECTORS = [
     ("Oczyszczalnia ścieków", r"oczyszczal\w*\s+ście|oczyszczalni|\bRLM\b|osad\w* czynn|złoż\w* biologiczn|reaktor\w* biologiczn"),
-    ("Kanalizacja sanitarna", r"kanalizac\w*\s+sanitarn|kanalizacj\w*(?!\s+deszcz)|przepompowni\w* ście|kanał\w* (sanitarn|grawitacyjn|tłoczn)|przewod\w* tłoczn|tłoczn\w* kanaliz"),
+    ("Kanalizacja sanitarna", r"kanalizac\w*\s+sanitarn|kanalizacj\w*\b(?!\s+deszcz)|przepompowni\w* ście|kanał\w* (sanitarn|grawitacyjn|tłoczn)|przewod\w* tłoczn|tłoczn\w* kanaliz"),
     ("Sieć wodociągowa", r"sie(ć|ci)\s+wodociąg|wodociąg|przyłącz\w* wod|magistral\w* wod"),
     ("Uzdatnianie i zaopatrzenie w wodę", r"uzdatniani\w* wody|\bSUW\b|stacj\w* uzdatniania|ujęci\w* wody|studni\w* głębin|zbiornik\w* wody czystej|hydrofor"),
     ("Kanalizacja deszczowa i retencja", r"kanalizac\w*\s+deszcz|wód opadowych|retencj|odwodnieni|zbiornik\w* retencyjn"),
@@ -130,10 +130,65 @@ def _num(s):
     return float(s.replace(" ", "").replace("\xa0", "").replace(",", "."))
 
 
-def extract_features(text: str) -> dict:
+NUMBER = r"(?<![\d.,])(?:\d{1,3}(?:[ \xa0]\d{3})+|\d+)(?:[.,]\d+)?"
+AMOUNT = (r"(?P<amount>" + NUMBER + r")\s*(?:(?P<unit>mln|milion\w*|tys\.?)(?:\s*(?:zł|PLN))?|(?:zł|PLN))"
+          r"(?!\w)(?:\s+(?P<tax>netto|brutto))?")
+BUDGET = re.compile(
+    r"\b(?:budżet(?:u)?|(?:całkowit\w*\s+)?(?:koszt|wartość)(?:\s+całkowit\w*)?)"
+    r"(?:\s+(?:inwestycji|projektu|przedsięwzięcia|zadania|budowy|brutto|netto|szacunkowy|wynosi|to|około|ok\.?))*"
+    r"\s*[:=–-]?\s*" + AMOUNT, re.I)
+ALTERNATIVE = re.compile(r"\s*(?:lub|albo|bądź|do|[–—-])\s*" + AMOUNT, re.I)
+LENGTH = re.compile(r"(" + NUMBER + r")\s*(km|mb|m)\b(?!\s*[23³²])", re.I)
+
+
+def _length_options(text):
+    lengths, totals = [], []
+    for m in LENGTH.finditer(text):
+        before = text[max(0, m.start()-65):m.start()]
+        if re.search(r"(?:średnic\w*|głębokoś\w*|szerokoś\w*|wysokoś\w*)\s*[:=]?\s*$", before, re.I):
+            continue
+        km = _num(m[1]) * (1 if m[2].lower() == "km" else .001)
+        option = {"value": round(km, 3), "source": _snip(text, m, 40)}
+        lengths.append(option)
+        if (re.search(r"(?:łącznie|razem|ogółem|(?:łączn\w*|całkowit\w*)\s+długoś\w*)"
+                      r"(?:\s+(?:sieci|wynosi|to|około))*\s*[:=]?\s*$", before, re.I)
+                or re.match(r"\s*,?\s*w tym\b", text[m.end():], re.I)):
+            totals.append(option)
+    return totals or lengths
+
+
+def _budget_options(text):
+    options = []
+    for first in BUDGET.finditer(text):
+        m = first
+        while m:
+            unit = (m["unit"] or "").lower()
+            factor = 1e6 if unit.startswith(("mln", "milion")) else 1000 if unit.startswith("tys") else 1
+            option = {"value": round(_num(m["amount"]) * factor, 2), "source": text[first.start():m.end()]}
+            if re.search(r"\bnetto\b", m.group(), re.I):
+                option["note"] = "Kwota netto. Prognoza na podstawie kwot brutto wymaga podania budżetu brutto."
+                option["net"] = True
+            options.append(option)
+            m = ALTERNATIVE.match(text, m.end())
+    return options
+
+
+def _resolve(options, key, choices, conflicts):
+    values = {option["value"] for option in options}
+    if len(values) <= 1:
+        return options[0] if options else None
+    for option in options:
+        if option["value"] == choices.get(key):
+            return dict(option, selected=True)
+    conflicts[key] = options
+    return None
+
+
+def extract_features(text: str, choices=None) -> dict:
     """Cechy inwestycji z opisu; każda z fragmentem źródłowym (albo None, gdy brak danych)."""
     t = text or ""
-    f = {}
+    f = {"conflicts": {}}
+    choices = choices or {}
     hits = []
     for name, rx in SUBSECTORS:
         ms = list(re.finditer(rx, t, re.I))
@@ -158,11 +213,9 @@ def extract_features(text: str) -> dict:
                     if re.search(r"projekt\w* budowlan|dokumentacj\w* projektow\w* zamawiając|na podstawie projektu", t, re.I) else None)
 
     scale = {}
-    km = [(_num(m.group(1)) * (1 if m.group(2).lower().startswith("km") else 0.001), m)
-          for m in re.finditer(r"(\d[\d\s]*(?:[.,]\d+)?)\s*(km|mb|m)\b(?!\s*[23³²])", t, re.I)]
-    if km:
-        total = sum(v for v, _ in km)
-        scale["length_km"] = {"value": round(total, 3), "source": "; ".join(_snip(t, m, 40) for _, m in km[:3])}
+    length = _resolve(_length_options(t), "length_km", choices, f["conflicts"])
+    if length:
+        scale["length_km"] = length
     for key, rx, unit in [("rlm", r"(\d[\d\s]*)\s*RLM", "RLM"), ("flow_m3d", r"(\d[\d\s]*(?:[.,]\d+)?)\s*m\s*[3³]\s*/\s*(d|dob)", "m³/d"),
                           ("connections", r"(\d+)\s*(przyłącz|przykanalik)", "szt."),
                           ("buildings", r"(\d+)\s*(budynk|gospodarstw|nieruchomoś)", "szt.")]:
@@ -171,14 +224,7 @@ def extract_features(text: str) -> dict:
             scale[key] = {"value": _num(m.group(1)), "unit": unit, "source": _snip(t, m, 40)}
     f["scale"] = scale
 
-    m = re.search(r"(\d+(?:[.,]\d+)?)\s*(mln|milion\w*)\s*(zł|pln)?", t, re.I) or \
-        re.search(r"(?:budżet|wartoś\w*|kwot\w*|koszt\w*)[^.\d]{0,40}?(\d[\d\s]{4,}(?:[.,]\d{2})?)\s*(zł|pln)", t, re.I)
-    if m:
-        val = _num(m.group(1)) * (1e6 if (m.group(2) or "").lower().startswith(("mln", "milion")) else 1)
-        f["budget_pln"] = {"value": round(val, 2), "source": _snip(t, m, 50),
-                           "note": "traktowane jako kwota brutto (jak wartość umowy); szacunek netto bywa niższy o VAT"}
-    else:
-        f["budget_pln"] = None
+    f["budget_pln"] = _resolve(_budget_options(t), "budget_pln", choices, f["conflicts"])
     m = re.search(r"(\d+)\s*(miesi\w+|mies\.)", t, re.I)
     f["duration_months"] = {"value": int(m.group(1)), "source": _snip(t, m, 50)} if m else None
 
@@ -203,33 +249,40 @@ def case_profiles(con) -> list:
     out = []
     for p in con.execute("SELECT * FROM project ORDER BY project_id"):
         p = dict(p)
-        link = con.execute("SELECT * FROM project_link WHERE project_id=? AND status<>'odrzucone'", (p["project_id"],)).fetchone()
+        if (p.get("status") or "").strip().casefold() not in {"zakończone", "zakończony", "zakończona"}:
+            continue
+        link = con.execute("SELECT * FROM active_project_link WHERE project_id=? AND status='potwierdzone' ORDER BY id", (p["project_id"],)).fetchone()
         texts, desc_src = [p["name"]], None
-        if link:
-            for n in con.execute("SELECT notice_number, notice_type, fields_json FROM notice WHERE ocid=? "
+        if not link:
+            continue
+        for n in con.execute("SELECT notice_number, notice_type, fields_json FROM notice WHERE ocid=? "
                                  "AND notice_type IN ('ContractNotice','TenderResultNotice','ContractPerformingNotice') "
                                  "ORDER BY notice_type='ContractNotice' DESC, publication_date", (link["ocid"],)):
-                d = P.find(json.loads(n["fields_json"] or "[]"), r"^Krótki opis przedmiotu")
-                if d and d["value"]:
-                    texts.append(d["value"])
-                    desc_src = n["notice_number"]
-                    break
+            d = P.find(json.loads(n["fields_json"] or "[]"), r"^Krótki opis przedmiotu")
+            if d and d["value"]:
+                texts.append(d["value"])
+                desc_src = n["notice_number"]
+                break
         m = re.search(r"Opis:\s*„(.+)”", p.get("annotation") or "", re.S)
         if m:
             texts.append(m.group(1))
         text = "\n".join(texts)
         feats = extract_features(text)
         contracts = [dict(c) for c in con.execute(
-            "SELECT c.* FROM contract c JOIN project_link l ON l.ocid=c.ocid AND (l.part_no=0 OR l.part_no=c.part_no) "
-            "WHERE l.project_id=? AND l.status<>'odrzucone' ORDER BY c.part_no", (p["project_id"],))]
-        value = sum(c["value"] or 0 for c in contracts) or None
-        paid = sum(c["paid_total"] or 0 for c in contracts) if contracts and all(c["paid_total"] for c in contracts) else None
+            "SELECT c.* FROM contract c JOIN active_project_link l ON l.ocid=c.ocid AND (l.part_no=0 OR l.part_no=c.part_no) "
+            "WHERE l.project_id=? AND l.status='potwierdzone' ORDER BY c.part_no", (p["project_id"],))]
+        if not contracts or not all(c["performing_notice"] and c["actual_end"] for c in contracts):
+            continue
+        value = sum(c["value"] for c in contracts) if all(c["value"] for c in contracts) else None
+        paid = sum(c["paid_total"] or 0 for c in contracts) if contracts and all(c["paid_total"] is not None for c in contracts) else None
         planned = [_months(c["signed_date"], c["planned_end"]) for c in contracts]
         delays = [(date.fromisoformat(c["actual_end"]) - date.fromisoformat(c["planned_end"])).days
                   for c in contracts if c["actual_end"] and c["planned_end"]]
         evs = [dict(e) for e in con.execute(
             "SELECT id, title, expert_title, status, event_date, source_notice, source_url, source_section, quote, "
-            "exemplar FROM visible_event WHERE project_id=? AND kind='propozycja' AND status<>'odrzucone'", (p["project_id"],))]
+            "exemplar FROM visible_event WHERE project_id=? AND kind='propozycja' AND status<>'odrzucone' "
+            "AND (ocid IS NULL OR ocid IN (SELECT ocid FROM project_link WHERE project_id=? AND status='potwierdzone'))",
+            (p["project_id"], p["project_id"]))]
         risk_hits = {}
         for e in evs:
             code = (e["expert_title"] or e["title"]).split()[0]
@@ -245,11 +298,13 @@ def case_profiles(con) -> list:
             "text": text, "description_source": desc_src or ("arkusz (adnotacja KPO)" if m else "nazwa przedsięwzięcia"),
             "features": feats, "n_contracts": len(contracts),
             "contract_value": value, "paid_total": paid,
-            "growth_pct": round((paid / value - 1) * 100, 1) if value and paid else None,
+            "growth_pct": round((paid / value - 1) * 100, 1) if value and paid is not None else None,
             "planned_months": round(sum(x for x in planned if x) / len([x for x in planned if x]), 1) if any(planned) else None,
             "delay_days": max(delays) if delays else None, "risks": risk_hits,
             "n_offers": next((f["value_num"] for f in con.execute(
-                "SELECT value_num FROM visible_fact WHERE project_id=? AND key='liczba_ofert'", (p["project_id"],))), None),
+                "SELECT value_num FROM visible_fact WHERE project_id=? AND key='liczba_ofert' "
+                "AND ocid IN (SELECT ocid FROM project_link WHERE project_id=? AND status='potwierdzone')",
+                (p["project_id"], p["project_id"]))), None),
         })
     return out
 
@@ -343,18 +398,24 @@ def _stat(values):
     return s
 
 
-def analyze(con, text: str, top_k: int = 5, min_score: float = 50.0) -> dict:
-    feats = extract_features(text)
-    cases = case_profiles(con)
+def _sectors(features):
+    sectors = features["subsector_extra"] + ([features["subsector_main"]] if features["subsector_main"] else [])
+    return {sector["value"] for sector in sectors}
+
+
+def analyze(con, text: str, top_k: int = 5, min_score: float = 50.0, choices=None) -> dict:
+    feats = extract_features(text, choices)
+    sectors = _sectors(feats)
+    cases = case_profiles(con) if sectors else []
     ranked = []
     for c in cases:
-        if not c["n_contracts"] and not c["risks"]:
-            continue  # brak danych o realizacji – nie ma czego porównać
+        if not (sectors & _sectors(c["features"])):
+            continue
         score, fs, same_sub, jac = compare(feats, c, text)
         ranked.append((score, c, fs, same_sub, jac))
     # kolejność: ten sam podsektor główny, potem odsetek pasujących cech, potem podobieństwo treści
     ranked.sort(key=lambda x: (-x[3], -x[0], -x[4]))
-    chosen = [x[:3] for x in ranked if x[0] >= min_score][:top_k] or [x[:3] for x in ranked[:3]]
+    chosen = [x[:3] for x in ranked if x[0] >= min_score][:top_k]
 
     similar = []
     for score, c, fs in chosen:
@@ -378,6 +439,11 @@ def analyze(con, text: str, top_k: int = 5, min_score: float = 50.0) -> dict:
     delay = _stat([s["delay_days"] for s in similar])
     planned = _stat([s["planned_months"] for s in similar])
     comparison = {"growth_pct": growth, "delay_days": delay, "planned_months": planned, "notes": []}
+    if (feats.get("budget_pln") or {}).get("net"):
+        comparison["notes"].append(feats["budget_pln"]["note"])
+    if not similar:
+        comparison["notes"].append("Brak porównywalnych zakończonych inwestycji z potwierdzonym powiązaniem "
+                                   "i wystarczającą zgodnością cech.")
     for key, label in (("growth_pct", "wzrostu wypłaty"), ("delay_days", "opóźnienia")):
         st = comparison[key]
         if st["n"] < 3:
@@ -400,11 +466,13 @@ def analyze(con, text: str, top_k: int = 5, min_score: float = 50.0) -> dict:
         comparison["notes"].append(
             f"Wypłata wyraźnie niższa niż wartość umowy w: {', '.join(low)}. To zwykle nie oszczędność, tylko ograniczenie "
             "zakresu, kary albo nienależyte wykonanie – sprawdź kartę przypadku przed użyciem tej wartości do budżetu.")
-    if feats.get("budget_pln") and growth.get("n"):
+    if not similar or feats["conflicts"]:
+        comparison["confidence"] = None
+    if feats.get("budget_pln") and not feats["budget_pln"].get("net") and growth["n"] >= 3 and not feats["conflicts"]:
         b = feats["budget_pln"]["value"]
-        ref = growth.get("median", statistics.median(growth["values"]))
+        ref = growth["median"]
         comparison["budget_after_growth"] = {
-            "value": round(b * (1 + ref / 100), 2), "basis": f"budżet × (1 + {ref}% – mediana/wartość wzrostu w podobnych przypadkach)"}
+            "value": round(b * (1 + ref / 100), 2), "basis": f"budżet × (1 + {ref}% – mediana wzrostu w podobnych przypadkach)"}
 
     # flagi ryzyk: z podobnych przypadków (ważone decyzją eksperta) + z ograniczeń w opisie
     flags = {}
@@ -460,7 +528,7 @@ def analyze(con, text: str, top_k: int = 5, min_score: float = 50.0) -> dict:
                                                ("duration_months", "termin realizacji")) if not feats.get(key)]
     if not feats.get("scale"):
         missing_inputs.append("skala (długość sieci, RLM, przepustowość, liczba przyłączy)")
-    return {"input_text": text, "features": feats, "missing_inputs": missing_inputs, "similar": similar,
+    return {"input_text": text, "choices": choices or {}, "features": feats, "missing_inputs": missing_inputs, "similar": similar,
             "n_candidates": len(ranked), "comparison": comparison, "flags": flag_list, "water_checklist": checklist}
 
 

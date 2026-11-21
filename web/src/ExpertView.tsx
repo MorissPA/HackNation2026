@@ -57,9 +57,14 @@ function RiskItem({ item, risks, onDone }: { item: QueueItem; risks: Risk[]; onD
             <p className="kv-v">{item.details || item.title}</p>
           </div>
           <div>
-            <div className="kv-l">Zidentyfikowany skutek (obliczenie z ogłoszeń)</div>
-            {item.impact?.length ? item.impact.map((i) => <p key={i.label} className="kv-v strong">{impactText(i)}</p>)
-              : <p className="kv-v muted">Brak policzonego skutku dla tej umowy.</p>}
+            <div className="kv-l">Wpływ zdarzenia według źródła</div>
+            {item.event_effect_quote ? <blockquote className="kv-v">{item.event_effect_quote}</blockquote>
+              : <p className="kv-v muted">W cytacie nie rozpoznano kwoty ani czasu przypisanego temu zdarzeniu.</p>}
+          </div>
+          <div>
+            <div className="kv-l">Wynik całej umowy względem pierwotnych warunków</div>
+            {item.contract_context?.length ? item.contract_context.map((i) => <p key={i.label} className="kv-v strong">{impactText(i)}</p>)
+              : <p className="kv-v muted">Brak obliczeń dla tej umowy.</p>}
           </div>
           <div>
             <label className="lbl" htmlFor="v-comment">Uzasadnienie (opcjonalnie)</label>

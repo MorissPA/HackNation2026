@@ -135,7 +135,7 @@ export default function App() {
       <Header view={view} stats={stats} onGo={(v) => go(v)} />
       <Breadcrumb view={view} pid={pid} />
       <main id="main">
-        {view === "nowa" && <AnalysisView />}
+        {view === "nowa" && <AnalysisView minChars={stats?.analysis_min_chars} />}
         {view === "weryfikacja" && <VerifyView onChanged={refresh} />}
         {view === "baza" && <BaseView selected={pid} onSelect={selectBase} refreshKey={refreshKey} />}
         {view === "karta" && pid && (

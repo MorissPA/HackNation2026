@@ -369,13 +369,34 @@ def _migrate(con):
                           ("review_status", "TEXT NOT NULL DEFAULT 'do_weryfikacji'")):
             if name not in cols:
                 con.execute(f"ALTER TABLE document_link ADD COLUMN {name} {typ}")
+    con.execute("""CREATE VIEW IF NOT EXISTS active_project_link AS SELECT * FROM project_link
+                   WHERE status IN ('potwierdzone','proponowane')""")
     for table in ("event", "fact"):
+        definition = con.execute("SELECT sql FROM sqlite_master WHERE type='view' AND name=?",
+                                 (f"visible_{table}",)).fetchone()
+        if definition and "active_project_link" not in definition[0]:
+            if not con.in_transaction:
+                con.execute("BEGIN IMMEDIATE")
+            con.execute(f"DROP VIEW IF EXISTS visible_{table}")
         con.execute(f"""CREATE VIEW IF NOT EXISTS visible_{table} AS SELECT item.* FROM {table} item
-                        WHERE NOT EXISTS (SELECT 1 FROM document_link link
+                        WHERE (item.ocid IS NULL OR EXISTS (SELECT 1 FROM active_project_link l
+                        WHERE l.project_id=item.project_id AND l.ocid=item.ocid
+                        AND (l.part_no IS NULL OR l.part_no=0 OR item.part_no=0 OR l.part_no=item.part_no)))
+                        AND NOT EXISTS (SELECT 1 FROM document_link link
                         WHERE link.project_id=item.project_id AND link.url=item.source_url
                         AND link.review_status='odrzucone')""")
     con.commit()
     risks.load(con)
+
+
+def retire_bzp_links(con, project_id, keep_ocid=None):
+    """Numer z arkusza wskazuje jedno postępowanie. Zachowaj historię i decyzje ręczne."""
+    con.execute("""UPDATE project_link SET status='nieaktualne', updated_at=?
+                   WHERE project_id=? AND method IN ('numer_bzp','odwołanie_w_ogłoszeniu')
+                   AND status IN ('potwierdzone','proponowane') AND ocid IS NOT ?
+                   AND NOT EXISTS (SELECT 1 FROM expert_decision d
+                       WHERE d.target='project_link' AND d.target_id=project_link.id)""",
+                (now(), project_id, keep_ocid))
 
 
 def get_setting(con, key, default=None):

@@ -236,7 +236,7 @@ def expert_examples(con, fragment, exclude_project=None, k=3):
     if len(target) < 2:
         return []
     scored = []
-    for r in con.execute("""SELECT project_id, quote, COALESCE(expert_title, title) AS t, exemplar FROM event
+    for r in con.execute("""SELECT project_id, quote, COALESCE(expert_title, title) AS t, exemplar FROM visible_event
             WHERE kind='propozycja' AND status IN ('zaakceptowane','poprawione') AND quote IS NOT NULL"""):
         if exclude_project and r["project_id"] == exclude_project:
             continue

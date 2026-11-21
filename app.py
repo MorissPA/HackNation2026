@@ -112,7 +112,7 @@ def project_card(pid):
     if p.get("annotation"):
         st.caption(f"Adnotacja: {p['annotation'][:400]}")
 
-    links = q("SELECT * FROM project_link WHERE project_id=? AND status<>'odrzucone'", (pid,))
+    links = q("SELECT * FROM active_project_link WHERE project_id=?", (pid,))
     gaps = q("SELECT * FROM gap WHERE project_id=?", (pid,))
     if not links:
         st.warning("Brak powiązania z postępowaniem w BZP. " + " ".join(g["message"] for g in gaps))
@@ -127,8 +127,8 @@ def project_card(pid):
         st.caption(l["evidence"])
     candidates_table(pid)
 
-    contracts = q("SELECT c.* FROM contract c JOIN project_link l ON l.ocid=c.ocid AND (l.part_no=0 OR l.part_no=c.part_no) "
-                  "WHERE l.project_id=? AND l.status<>'odrzucone' ORDER BY c.part_no", (pid,))
+    contracts = q("SELECT c.* FROM contract c JOIN active_project_link l ON l.ocid=c.ocid AND (l.part_no=0 OR l.part_no=c.part_no) "
+                  "WHERE l.project_id=? ORDER BY c.part_no", (pid,))
     facts = q("SELECT * FROM visible_fact WHERE project_id=?", (pid,))
     fx = {(f["key"], f["part_no"]): f for f in facts}
 
@@ -187,7 +187,7 @@ def project_card(pid):
             evidence(sel)
     with t3:
         ch = q("SELECT ch.*, c.part_no FROM contract_change ch JOIN contract c ON c.id=ch.contract_id "
-               "JOIN project_link l ON l.ocid=c.ocid AND (l.part_no=0 OR l.part_no=c.part_no) WHERE l.project_id=? AND l.status<>'odrzucone' "
+               "JOIN active_project_link l ON l.ocid=c.ocid AND (l.part_no=0 OR l.part_no=c.part_no) WHERE l.project_id=? "
                "ORDER BY ch.source_notice, ch.change_no", (pid,))
         if ch:
             st.dataframe(pd.DataFrame(ch)[["part_no", "change_no", "change_date", "legal_basis", "value_change",
@@ -257,7 +257,7 @@ def view_links():
                "zamawiającego, miejscowości, podsektora, nazwy, rodzaju zamówienia i skali. Ekspert potwierdza, "
                "wybiera innego kandydata albo odrzuca propozycję.")
     rows = q("SELECT p.project_id, p.name, p.public_id, l.id AS link_id, l.ocid, l.status, l.method, l.score "
-             "FROM project p LEFT JOIN project_link l ON l.project_id=p.project_id AND l.status<>'odrzucone' "
+             "FROM project p LEFT JOIN active_project_link l ON l.project_id=p.project_id "
              "WHERE p.public_id_type NOT LIKE '%BZP%' ORDER BY p.project_id")
     if not rows:
         st.info("Brak rekordów KPO.")

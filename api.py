@@ -5,13 +5,14 @@ Razem z frontendem:        cd web && npm run dev
 """
 import json
 import os
+import re
 import threading
 import uuid
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from riskminer import analysis, config, db, expert, export, importer, llm, matcher, pipeline, risks
 from riskminer.bzp.client import BZPClient
@@ -64,6 +65,7 @@ def stats(con=Depends(get_con)):
         "links_confirmed": one("SELECT count(*) FROM project_link WHERE status='potwierdzone'"),
         "links_proposed": one("SELECT count(*) FROM project_link WHERE status='proponowane'"),
         "proposals_open": one("SELECT count(*) FROM visible_event WHERE kind='propozycja' AND status='do_weryfikacji'"),
+        "analysis_min_chars": ANALYSIS_MIN_CHARS,
         "sample_available": SAMPLE.exists(),
         "llm_model": f"{config.LLM_PROVIDER} / {config.LLM_MODEL}",
     }
@@ -141,6 +143,18 @@ def _context(con, notice_number, section):
     return llm.notice_neighbours(con, notice_number, section)
 
 
+def _effect_quote(quote):
+    """Dosłowne zdanie łączące przyczynę z ilościowym skutkiem w dowodzie tego zdarzenia."""
+    for sentence in re.split(r"(?<=[.!?])\s+|\s*\|\s*|\n+", quote or ""):
+        cause = re.search(r"\b(z powodu|wskutek|ze względu na|w związku z|spowodował\w*)\b", sentence, re.I)
+        change = re.search(r"\b(?:wydłuż\w*|przedłuż\w*|przesuni\w*|zwiększ\w*|wzros\w*|obniż\w*)"
+                           r"[^.;!?]{0,60}?\bo\s+\d[\d ,.]*\s*(?:dni|tygodn\w*|miesi\w*|(?:tys\.?|mln)?\s*(?:zł|PLN)|%)",
+                           sentence, re.I)
+        if cause and change:
+            return sentence.strip()
+    return None
+
+
 @app.get("/api/verify-queue")
 def verify_queue(con=Depends(get_con)):
     """Kolejka eksperta: propozycje powiązań KPO i propozycje ryzyk (reguły, LLM, sygnały) z dowodem."""
@@ -159,9 +173,9 @@ def verify_queue(con=Depends(get_con)):
                        "ORDER BY (e.confidence='niska') DESC, e.project_id, COALESCE(e.event_date,''), e.id"):
         before, after = _context(con, e["source_notice"], e["source_section"])
         n = con.execute("SELECT notice_type FROM notice WHERE notice_number=?", (e["source_notice"],)).fetchone()
-        impact = rows(con, "SELECT label, value_num, unit FROM visible_fact WHERE project_id=? AND part_no=? AND key IN "
+        contract_context = rows(con, "SELECT label, value_num, unit FROM visible_fact WHERE project_id=? AND ocid=? AND part_no=? AND key IN "
                            "('wzrost_wyplaty_pct','opoznienie_vs_pierwotny_dni','wzrost_wyplaty_pln') ORDER BY key",
-                      (e["project_id"], e["part_no"]))
+                      (e["project_id"], e["ocid"], e["part_no"]))
         items.append({"type": "ryzyko", "id": f"event:{e['id']}", "event_id": e["id"], "project_id": e["project_id"],
                       "project": e["project"], "recipient": e["recipient"], "code": e["title"].split()[0],
                       "title": e["title"], "origin": "model językowy" if e["event_type"] == "ryzyko LLM" else "reguła",
@@ -169,7 +183,8 @@ def verify_queue(con=Depends(get_con)):
                       "source_url": e["source_url"], "source_section": e["source_section"],
                       "notice_label": pipeline.NOTICE_LABELS.get(n["notice_type"], n["notice_type"]) if n else
                                       ("Dokument z BIP" if (e["source_notice"] or "").startswith("BIP") else None),
-                      "quote": e["quote"], "before": before, "after": after, "impact": impact,
+                      "quote": e["quote"], "before": before, "after": after,
+                      "event_effect_quote": _effect_quote(e["quote"]), "contract_context": contract_context,
                       "llm_confidence": e["confidence"] if e["event_type"] == "ryzyko LLM" else None})
     return items
 
@@ -206,7 +221,7 @@ def projects(con=Depends(get_con)):
                (SELECT estimated_value FROM procedure pr WHERE pr.ocid=l.ocid) AS estimated_value,
                p.annotation
         FROM project p
-        LEFT JOIN project_link l ON l.project_id=p.project_id AND l.status<>'odrzucone'
+        LEFT JOIN active_project_link l ON l.project_id=p.project_id
         ORDER BY p.project_id""")
     for p in out:
         f = analysis.extract_features(f"{p['name']} {p.pop('annotation') or ''}")
@@ -235,9 +250,9 @@ def project_card(pid: str, con=Depends(get_con)):
         raise HTTPException(404, "Nie ma takiego projektu")
     p = dict(p)
     p.pop("raw_json", None)
-    links = rows(con, "SELECT * FROM project_link WHERE project_id=? AND status<>'odrzucone'", (pid,))
-    join = ("JOIN project_link l ON l.ocid=c.ocid AND (l.part_no=0 OR l.part_no=c.part_no) "
-            "WHERE l.project_id=? AND l.status<>'odrzucone'")
+    links = rows(con, "SELECT * FROM active_project_link WHERE project_id=?", (pid,))
+    join = ("JOIN active_project_link l ON l.ocid=c.ocid AND (l.part_no=0 OR l.part_no=c.part_no) "
+            "WHERE l.project_id=?")
     contracts = rows(con, f"SELECT c.* FROM contract c {join} ORDER BY c.part_no", (pid,))
     changes = rows(con, f"SELECT ch.*, c.part_no FROM contract_change ch JOIN contract c ON c.id=ch.contract_id {join} "
                         "ORDER BY c.part_no, ch.source_notice, ch.change_no", (pid,))
@@ -429,7 +444,7 @@ def document_decision(pid: str, decision: DocumentDecision, con=Depends(get_con)
 def kpo_links(con=Depends(get_con)):
     out = rows(con, """
         SELECT p.project_id, p.name, p.public_id, l.ocid, l.status, l.method, l.score
-        FROM project p LEFT JOIN project_link l ON l.project_id=p.project_id AND l.status<>'odrzucone'
+        FROM project p LEFT JOIN active_project_link l ON l.project_id=p.project_id
         WHERE p.public_id_type NOT LIKE '%BZP%' ORDER BY p.project_id""")
     for r in out:
         r["candidates"] = _candidates(con, r["project_id"])
@@ -460,20 +475,24 @@ def link_decision(pid: str, d: LinkDecision, con=Depends(get_con)):
 
 
 # --------------------------------------------------------------------------- analiza nowego projektu
+ANALYSIS_MIN_CHARS = 30
+
+
 class AnalysisRequest(BaseModel):
     text: str
-    top_k: int = 5
+    top_k: int = Field(default=5, ge=1)
+    choices: dict[str, float] = Field(default_factory=dict)
 
 
-def _analyze(con, text, top_k=5):
-    if len((text or "").strip()) < 30:
-        raise HTTPException(400, "Opis jest za krótki – podaj co najmniej zakres, podsektor i skalę inwestycji.")
-    return analysis.analyze(con, text, top_k=top_k)
+def _analyze(con, text, top_k=5, choices=None):
+    if len((text or "").strip()) < ANALYSIS_MIN_CHARS:
+        raise HTTPException(400, f"Opis musi mieć co najmniej {ANALYSIS_MIN_CHARS} znaków. Podaj zakres, podsektor i skalę inwestycji.")
+    return analysis.analyze(con, text, top_k=top_k, choices=choices)
 
 
 @app.post("/api/analysis")
 def run_analysis(req: AnalysisRequest, con=Depends(get_con)):
-    return _analyze(con, req.text, req.top_k)
+    return _analyze(con, req.text, req.top_k, req.choices)
 
 
 @app.post("/api/analysis/file")
@@ -489,7 +508,7 @@ async def run_analysis_file(file: UploadFile = File(...), con=Depends(get_con)):
 
 @app.post("/api/analysis/export")
 def export_analysis(req: AnalysisRequest, format: str = "csv", con=Depends(get_con)):
-    result = _analyze(con, req.text, req.top_k)
+    result = _analyze(con, req.text, req.top_k, req.choices)
     if format == "json":
         body = json.dumps(result, ensure_ascii=False, indent=2)
         return Response(body, media_type="application/json",
