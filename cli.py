@@ -20,6 +20,8 @@ def main():
     f = sub.add_parser("fetch"); f.add_argument("ids", nargs="*"); f.add_argument("--all", action="store_true")
     f.add_argument("--offline", action="store_true")
     s = sub.add_parser("show"); s.add_argument("id")
+    ex = sub.add_parser("export", help="Eksport całej bazy przypadków do JSON i CSV (ZIP)")
+    ex.add_argument("--out", default="docs/przyklad_eksportu")
     rp = sub.add_parser("report", help="Raport z testu: jakość połączeń i analiza nowego projektu (docs/)")
     rp.add_argument("--out", default="docs")
     model = sub.add_parser("llm", help="Przeanalizuj przyczyny i ryzyka w dowodach projektu")
@@ -42,6 +44,14 @@ def main():
             print(f"==> {pid}: {res['status']} – {res['message']} | faktów {res['facts']}, zdarzeń {res['events']}")
         print("Zapytań sieciowych:", client.n_network_calls,
               "| źródła:", ", ".join(sorted(client.sources_used)) or "tylko cache")
+    elif args.cmd == "export":
+        import json as _json
+        from riskminer import export
+        out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
+        data = export.to_json(con)
+        (out / "risk_miner_baza.json").write_text(_json.dumps(data, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
+        (out / "risk_miner_baza_csv.zip").write_bytes(export.to_csv_zip(con))
+        print(f"Projektów: {len(data['projekty'])} | zapisano: {out / 'risk_miner_baza.json'} i {out / 'risk_miner_baza_csv.zip'}")
     elif args.cmd == "report":
         from riskminer import report
         rep = report.build(con)

@@ -77,6 +77,15 @@ export const STATUS_ICON: Record<string, string> = {
   "pasuje": "✅", "częściowo": "🟨", "nie pasuje": "❌", "różni się": "❌", "brak danych": "❔",
 };
 const CONF: Record<string, string> = { wysoka: "ok", "średnia": "warn", niska: "bad" };
+
+/** Rodzaj informacji (treść zadania: „wyraźnie odróżniać dane źródłowe, obliczenia i wnioski”). */
+const ORIGIN: Record<string, [string, string]> = {
+  dane: ["neutral", "dane źródłowe"], obliczenie: ["info", "obliczenie"], wniosek: ["warn", "wniosek – do oceny eksperta"],
+};
+export function OriginTag({ kind }: { kind: "dane" | "obliczenie" | "wniosek" }) {
+  const [cls, label] = ORIGIN[kind];
+  return <span className={`chip ${cls}`} title="Rodzaj informacji">{label}</span>;
+}
 export function ConfidenceChip({ level }: { level?: string | null }) {
   return level ? <span className={`chip ${CONF[level] ?? "neutral"}`}>pewność {level}</span> : null;
 }

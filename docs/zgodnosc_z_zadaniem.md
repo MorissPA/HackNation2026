@@ -30,8 +30,8 @@ Stan po sprawdzeniu kodu i bazy na paczce organizatora (22 rekordy). Legenda: �
 |---|---|---|
 | Relacje: projekt, postępowanie, ogłoszenia, kontrakty, zmiany, zdarzenia, koszty i terminy, dokumenty i źródła | ✅ | tabele `project`, `procedure`, `notice`, `contract`, `contract_change`, `event`, `fact`, `document`, `document_link` |
 | Każdy rekord i wniosek prowadzi do źródła: identyfikator, link, data pobrania, strona/fragment | ✅ | numer ogłoszenia, URL, sekcja i punkt, cytat, data pobrania; BIP – numer strony PDF |
-| Rozdzielenie danych źródłowych, obliczeń i wniosków | 🟨 | w karcie: fakt / obliczenie (z formułą) / propozycja; w widoku analizy sekcje nie są tak oznaczone |
-| Wyniki jako rekordy do filtrowania, aktualizacji i eksportu (JSON/CSV) | 🟨 | eksport analizy (CSV/JSON) i raport połączeń (CSV); brak eksportu całej bazy przypadków |
+| Rozdzielenie danych źródłowych, obliczeń i wniosków | ✅ | w karcie: fakt / obliczenie (z formułą) / propozycja; w analizie każda sekcja ma etykietę „dane źródłowe” / „obliczenie” / „wniosek – do oceny eksperta” |
+| Wyniki jako rekordy do filtrowania, aktualizacji i eksportu (JSON/CSV) | ✅ | eksport całej bazy (JSON z relacjami, CSV – 13 tabel w ZIP) z interfejsu, API (`/api/export`) i CLI; eksport analizy; raport połączeń CSV |
 
 ### Ryzyka i praca eksperta (pkt 3)
 
@@ -62,7 +62,7 @@ Stan po sprawdzeniu kodu i bazy na paczce organizatora (22 rekordy). Legenda: �
 | Wymaganie | Stan | Jak / czego brakuje |
 |---|---|---|
 | Model ustawiany w konfiguracji, przykładowy plik konfiguracji | ✅ | `LLM_PROVIDER` / `LLM_MODEL` / `LLM_API_KEY`, `llm.env.example`; domyślnie lokalny Qwen bez klucza |
-| Informacja, gdzie przetwarzane są dane, licencje | 🟨 | opis w README; brak pliku LICENSE projektu i licencji wag Qwen (Apache 2.0) oraz llama.cpp (MIT) w README |
+| Informacja, gdzie przetwarzane są dane, licencje | ✅ | LICENSE (MIT); README: źródła, miejsce przetwarzania (lokalnie, w procesie; opcjonalnie Ollama/Anthropic), tabela licencji bibliotek i wag Qwen 2.5 (Apache 2.0) |
 | DOCX i PDF z warstwą tekstową | ✅ | |
 | OCR skanów (atut) | ❌ | 6 skanów w BIP Zagrodna – dowodem tytuł i data |
 | Rejestr źródeł i operacji | 🟨 | cache zapytań, `import_run`, historia decyzji; brak dziennika operacji użytkownika |
@@ -78,7 +78,7 @@ Stan po sprawdzeniu kodu i bazy na paczce organizatora (22 rekordy). Legenda: �
 | Schemat architektury i modelu danych | ✅ `docs/architektura.html` (przepływ + UML 2.0) |
 | Instrukcja uruchomienia, opis źródeł i metod dopasowania | ✅ README |
 | Raport z testu (poprawne / niepewne / błędne połączenia + analiza nowego projektu) | ✅ `docs/raport_z_testu.md` (15 / 7 / 0) |
-| Przykładowy eksport ustrukturyzowanych danych | 🟨 eksport analizy i raport CSV; brak eksportu bazy przypadków |
+| Przykładowy eksport ustrukturyzowanych danych | ✅ `docs/przyklad_eksportu/` (JSON i CSV ZIP, generowane `cli.py export`) |
 | Opis rozwiązania (do 10 stron) | ❌ |
 | Prezentacja PDF (do 10 slajdów) | ❌ |
 | Film (do 3 minut) | ❌ |

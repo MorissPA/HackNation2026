@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { api, type Row } from "./api";
-import { ConfidenceChip, ErrorBox, Evidence, LinkChip, STATUS_ICON, Spinner, mln, num, pln } from "./ui";
+import { ConfidenceChip, ErrorBox, Evidence, LinkChip, OriginTag, STATUS_ICON, Spinner, mln, num, pln } from "./ui";
 
 const EXAMPLES: { label: string; text: string }[] = [
   {
@@ -99,7 +99,8 @@ export function AnalysisView() {
       {result && f ? (
         <>
           <div className="panel">
-            <h3>Cechy nowej inwestycji</h3>
+            <div className="row"><h3>Cechy nowej inwestycji</h3><OriginTag kind="dane" />
+              <span className="small muted">odczytane z Twojego opisu, z fragmentem, z którego pochodzą</span></div>
             <div className="scroll"><table><tbody>
               <Feature label="Podsektor główny" f={f.subsector_main} />
               <tr><td className="muted small">Podsektory dodatkowe</td><td colSpan={2}>{f.subsector_extra.length ? f.subsector_extra.map((x: Row) => x.value).join(", ") : <span className="muted">—</span>}</td></tr>
@@ -119,7 +120,8 @@ export function AnalysisView() {
           </div>
 
           <div className="panel">
-            <div className="row between"><h3>Podobne przypadki ({result.similar.length} z {result.n_candidates})</h3>
+            <div className="row between"><div className="row"><h3>Podobne przypadki ({result.similar.length} z {result.n_candidates})</h3>
+              <OriginTag kind="wniosek" /><span className="small muted">dobór; kwoty i terminy przypadków to dane źródłowe z BZP</span></div>
               <span className="small muted">Każda cecha waży tyle samo; „częściowo” liczy się jako pół. Cechy bez danych nie są liczone. Najpierw przypadki z tym samym podsektorem głównym.</span></div>
             {result.similar.map((s: Row) => (
               <details key={s.project_id} className="event">
@@ -150,7 +152,7 @@ export function AnalysisView() {
 
           {cmp ? (
             <div className="panel">
-              <div className="row between"><h3>Koszty i terminy w podobnych przypadkach</h3>
+              <div className="row between"><div className="row"><h3>Koszty i terminy w podobnych przypadkach</h3><OriginTag kind="obliczenie" /></div>
                 {cmp.confidence ? <span className="row"><span className="small muted">pewność prognozy:</span><ConfidenceChip level={cmp.confidence.level} /></span> : null}</div>
               {cmp.confidence ? <p className="small muted">{cmp.confidence.basis}</p> : null}
               <div className="kpis">
@@ -166,7 +168,8 @@ export function AnalysisView() {
           ) : null}
 
           <div className="panel">
-            <h3>Flagi ryzyka i rekomendacje</h3>
+            <div className="row"><h3>Flagi ryzyka i rekomendacje</h3><OriginTag kind="wniosek" />
+              <span className="small muted">każda flaga wskazuje przypadki i dowody, na których się opiera</span></div>
             {result.flags.length ? result.flags.map((fl: Row) => (
               <div key={fl.code} className="event" style={{ padding: 12, display: "grid", gap: 6 }}>
                 <div className="row"><b>{fl.code} {fl.name}</b><span className={`chip ${STRENGTH[fl.strength]}`}>sygnał {fl.strength}</span></div>
@@ -188,7 +191,7 @@ export function AnalysisView() {
 
           {result.water_checklist ? (
             <div className="panel">
-              <h3>Checklista przygotowania sieci wodociągowej</h3>
+              <div className="row"><h3>Checklista przygotowania sieci wodociągowej</h3><OriginTag kind="dane" /></div>
               <p className="small muted">Według poradnika eksperckiego organizatora. „Brak w opisie” to pytanie do uzupełnienia przed ogłoszeniem zamówienia, a nie stwierdzenie, że czegoś nie zrobiono.</p>
               <div className="scroll"><table><tbody>{result.water_checklist.map((c: Row) => (
                 <tr key={c.item}><td>{c.status === "jest w opisie" ? "✅" : "❔"}</td><td>{c.item} <span className="small muted">({c.ref})</span></td>

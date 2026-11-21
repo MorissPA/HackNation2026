@@ -41,6 +41,13 @@ export function BaseView({ stats, selected, onSelect, job, startFetch, refreshKe
             Pobierz z BZP wszystkie rekordy</button>
         </div>
       </div>
+      {projects.length ? (
+        <div className="row small" style={{ justifyContent: "flex-end", marginTop: -8 }}>
+          <span className="muted">Eksport całej bazy przypadków:</span>
+          <a className="btn" href="/api/export?format=json" download title="Projekt po projekcie z relacjami, dowodami i decyzjami eksperta">JSON</a>
+          <a className="btn" href="/api/export?format=csv" download title="Archiwum ZIP z tabelami CSV (Excel)">CSV (ZIP)</a>
+        </div>
+      ) : null}
       <ErrorBox error={error} />
 
       {report ? (

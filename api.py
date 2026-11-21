@@ -13,7 +13,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel
 
-from riskminer import analysis, db, expert, importer, llm, matcher, pipeline, risks
+from riskminer import analysis, db, expert, export, importer, llm, matcher, pipeline, risks
 from riskminer.bzp.client import BZPClient
 
 # Arkusz organizatora: domyślnie katalog wyżej (paczka „materialy_dla_uczestnikow”), w kontenerze montowany
@@ -61,6 +61,19 @@ def stats(con=Depends(get_con)):
         "proposals_open": one("SELECT count(*) FROM visible_event WHERE kind='propozycja' AND status='do_weryfikacji'"),
         "sample_available": SAMPLE.exists(),
     }
+
+
+@app.get("/api/export")
+def export_base(format: str = "json", con=Depends(get_con)):
+    """Eksport całej bazy przypadków: JSON (projekt po projekcie z relacjami) albo CSV (ZIP z tabelami)."""
+    if format == "json":
+        body = json.dumps(export.to_json(con), ensure_ascii=False, indent=1, default=str)
+        return Response(body, media_type="application/json",
+                        headers={"Content-Disposition": 'attachment; filename="risk_miner_baza.json"'})
+    if format == "csv":
+        return Response(export.to_csv_zip(con), media_type="application/zip",
+                        headers={"Content-Disposition": 'attachment; filename="risk_miner_baza_csv.zip"'})
+    raise HTTPException(400, "Format: json albo csv")
 
 
 @app.get("/api/risks")

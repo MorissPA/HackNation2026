@@ -51,10 +51,10 @@ Wzrost wypłaty: n = 5, mediana 6.8%, zakres -45.0…40.3%. Opóźnienie: n = 5,
 
 | Ryzyko | Siła sygnału | Rekomendowane działanie |
 |---|---|---|
-| R07 Nieprzewidziane zmiany i roboty dodatkowe | średnia | Zaplanować rezerwę budżetową na roboty nieprzewidziane (na podstawie wzrostu wypłat w podobnych przypadkach). |
 | R04 Decyzje, pozwolenia i uzgodnienia zależne od podmiotów trzecich | silna | Ustalić, kto i kiedy uzyskuje decyzje (pozwolenie wodnoprawne, środowiskowa, pozwolenie na budowę), i ująć ich czas w harmonogramie. |
+| R07 Nieprzewidziane zmiany i roboty dodatkowe | średnia | Zaplanować rezerwę budżetową na roboty nieprzewidziane (na podstawie wzrostu wypłat w podobnych przypadkach). |
 | R03 Kolizje, dostęp do terenu i prawa do nieruchomości | średnia | Potwierdzić prawo do dysponowania gruntem na całej trasie i zinwentaryzować kolizje z uzbrojeniem. |
-| R01 Niepełny lub niespójny zakres | słaba | Zweryfikować kompletność zakresu w PFU/OPZ (inwentaryzacja, przedmiar, granice zadania) przed ogłoszeniem. |
+| R06 Nierealistyczny harmonogram i nieuwzględnione zależności | średnia | Zweryfikować realność terminu względem procedur, sezonu robót i prób/rozruchu. |
 
 ### Rozbudowa sieci wodociągowej
 

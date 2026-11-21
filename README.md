@@ -198,6 +198,16 @@ Wynik dla Modlikowic:
 
 Ogłoszenie o wykonaniu umowy, które podaje „wykonana należycie: Nie” albo wypłatę poniżej 90% wartości umowy, daje zdarzenie typu `sygnał` i propozycję R12 do oceny eksperta.
 
+## Eksport bazy przypadków
+
+W interfejsie (Baza inwestycji → „Eksport całej bazy przypadków”), przez API (`/api/export?format=json` lub `csv`) albo z terminala:
+
+```bash
+.venv/bin/python cli.py export        # docs/przyklad_eksportu/risk_miner_baza.json i risk_miner_baza_csv.zip
+```
+
+JSON zawiera projekt po projekcie z relacjami: powiązanie → postępowanie → ogłoszenia, umowy ze zmianami, fakty i obliczenia z dowodem, zdarzenia ze statusem eksperta, braki, dokumenty BIP i historię decyzji. CSV to archiwum ZIP z 13 tabelami (separator `;`, UTF-8 z BOM) i plikiem z opisem. Dowody odrzucone przez eksperta są pomijane.
+
 ## Raport z testu
 
 ```bash
@@ -239,6 +249,36 @@ Tabele: `project`, `procedure` (OCID), `project_link` (z metodą dopasowania, do
 
 ## Usługi, licencje, miejsce przetwarzania
 
-- Dane pochodzą z publicznego API BZP (ezamowienia.gov.pl). Odczyt nie wymaga procedury integracyjnej.
-- Dane i decyzje są przechowywane w SQLite. W konfiguracji lokalnej fragmenty przetwarza serwer modelu na komputerze użytkownika. Przy wyborze Anthropic fragmenty trafiają do API dostawcy, zgodnie z warunkami i regionem konta. Licencja lokalnego modelu zależy od wybranych wag.
-- Zależności: Streamlit (Apache 2.0), pandas (BSD), openpyxl (MIT), requests (Apache 2.0).
+**Licencja projektu:** MIT, zob. [LICENSE](LICENSE).
+
+**Źródła danych (tylko odczyt danych publicznych):**
+- Biuletyn Zamówień Publicznych: kopia ogłoszeń wod-kan udostępniona przez organizatora (`bzp.cytr.us`) i oficjalne API e-Zamówień (`ezamowienia.gov.pl`). Odczyt nie wymaga procedury integracyjnej.
+- Biuletyny Informacji Publicznej gmin z `bip_sources.json` (obecnie BIP Gminy Zagrodno).
+- Model Qwen pobierany jednorazowo z Hugging Face, ze sprawdzeniem sumy SHA-256.
+
+**Gdzie przetwarzane są dane:**
+- Baza SQLite, cache zapytań, dokumenty i decyzje eksperta są lokalnie: na komputerze albo w wolumenie kontenera.
+- Domyślny model językowy (Qwen 2.5 1,5B, llama.cpp) działa w procesie aplikacji na CPU. Fragmenty dokumentów nie opuszczają maszyny i nie jest potrzebny klucz API.
+- Opcjonalnie można ustawić `LLM_PROVIDER=ollama` (serwer na wskazanym hoście) albo `LLM_PROVIDER=anthropic`. W tym drugim przypadku fragmenty trafiają do API Anthropic, zgodnie z warunkami i regionem konta, potencjalnie poza UE. Zmiana dostawcy nie wymaga zmian w kodzie.
+- Aplikacja nie przetwarza danych osobowych poza tym, co jest w publicznych ogłoszeniach: nazwy zamawiających i wykonawców, a przy jednoosobowych firmach także imiona i nazwiska.
+
+**Model i biblioteki:**
+
+| Składnik | Wersja | Licencja |
+|---|---|---|
+| Qwen2.5-1.5B-Instruct (wagi GGUF, Q4_K_M) | – | Apache 2.0 |
+| llama.cpp / llama-cpp-python | 0.3.19 | MIT |
+| FastAPI | 0.128.8 | MIT |
+| Uvicorn | 0.39.0 | BSD-3-Clause |
+| Pydantic | 2.13.5 | MIT |
+| requests | 2.32.5 | Apache 2.0 |
+| pandas | 2.3.3 | BSD-3-Clause |
+| openpyxl | 3.1.5 | MIT |
+| pypdf | 6.21.4 | BSD-3-Clause |
+| python-multipart | 0.0.20 | Apache 2.0 |
+| Streamlit (interfejs pomocniczy) | 1.50.0 | Apache 2.0 |
+| React, React DOM | 18.3.1 | MIT |
+| Vite, @vitejs/plugin-react | 6.4.6, 4.7.0 | MIT |
+| TypeScript | 5.9.3 | Apache 2.0 |
+| concurrently (tylko tryb deweloperski) | 9.2.5 | MIT |
+| Czcionki IBM Plex (Google Fonts) | – | SIL Open Font License 1.1 |

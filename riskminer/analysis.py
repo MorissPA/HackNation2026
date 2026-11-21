@@ -426,12 +426,15 @@ def analyze(con, text: str, top_k: int = 5, min_score: float = 50.0) -> dict:
                                          "confirmed_cases": 0, "evidence": [], "from_description": []})
             fl["from_description"].append(cst)
             fl["weight"] += 0.3
-    flag_list = sorted(flags.values(), key=lambda f: -f["weight"])
-    for fl in flag_list:
+    for fl in flags.values():
         fl["weight"] = round(fl["weight"], 2)
         fl["strength"] = ("silna" if fl["confirmed_cases"] and (fl["from_description"] or len(fl["cases"]) >= 2)
                           else "średnia" if fl["confirmed_cases"] or len(fl["cases"]) >= 2 or fl["from_description"]
                           else "słaba")
+    # najpierw siła sygnału (potwierdzenie eksperta + opis), potem waga
+    order = {"silna": 0, "średnia": 1, "słaba": 2}
+    flag_list = sorted(flags.values(), key=lambda f: (order[f["strength"]], -f["weight"]))
+    for fl in flag_list:
         action, clause = ACTIONS.get(fl["code"], ("", ""))
         fl["action"], fl["clause"] = action, clause
         fl["basis"] = (
