@@ -14,7 +14,7 @@ Aplikacja działa na **http://localhost:8000** (jeden port: interfejs i API).
 
 - **Dane:** wolumen `riskminer-data` (`/data` w kontenerze) trzyma bazę SQLite, cache BZP/BIP i model GGUF. Przetrwa `docker compose restart` oraz `down` i `up`. Wyczyścić go można przez `docker compose down -v`.
 - **Arkusz organizatora:** montowany tylko do odczytu jako `/import/Risk_Miner_dane_projekty.xlsx`. Przy pustej bazie importuje się automatycznie przy starcie (`RISKMINER_AUTOIMPORT=1`). Inne położenie pliku: `RISKMINER_XLSX=/ścieżka/do/pliku.xlsx docker compose up -d`. Bez pliku arkusz można wgrać w interfejsie przyciskiem „Wgraj XLSX / CSV”.
-- **Model Bielik-11B** (~6,7 GB, sprawdzany SHA-256) pobiera się do wolumenu przy pierwszej analizie LLM. Kolejne starty korzystają z pobranego pliku. Kontener nie ma dostępu do GPU Maca, więc model działa tam na CPU (kilkadziesiąt sekund na fragment) i potrzebuje ok. 8 GB pamięci dla Dockera (Ustawienia → Resources). Najszybciej działa uruchomienie bez kontenera (`npm run start`), które na Macu korzysta z GPU.
+- **Model Bielik-11B** (~6,7 GB, sprawdzany SHA-256) jest wspólny z uruchomieniem bez kontenera: compose podłącza katalog `data/llm` z hosta jako `/data/llm` (inne położenie: `RISKMINER_MODELS=/ścieżka`). Gdy pliku brak, aplikacja pobiera go tam przy pierwszej analizie. Kontener nie ma dostępu do GPU Maca, więc model liczy na CPU: **ok. 2–2,5 min na fragment** (pierwsze wywołanie z ładowaniem modelu dłużej), a analiza wszystkich 62 fragmentów trwa ok. 2 godzin. Potrzeba ok. 8 GB pamięci dla Dockera (Ustawienia → Resources); kontekst modelu w kontenerze to 4096 tokenów (`LLM_CONTEXT`). Do analizy modelem na Macu szybsze jest uruchomienie bez kontenera (`npm run start`, GPU: ok. 6 s na fragment).
 - **Inny port:** `RISKMINER_PORT=9000 docker compose up -d`.
 - **macOS:** paczka organizatora leży zwykle w folderze Pobrane. Przy pierwszym starcie macOS pyta, czy Docker może uzyskać dostęp do tego folderu. Bez zgody kontener zatrzymuje się w stanie „Created”. Zgodę można też włączyć w Ustawienia systemowe → Prywatność i ochrona → Pliki i foldery → Docker.
 - **Pierwsza budowa** obrazu trwa ok. 20 minut, bo `llama-cpp-python` kompiluje się ze źródeł. Obraz waży ok. 1,1 GB, a kolejne budowy korzystają z cache.
@@ -25,7 +25,8 @@ Test wdrożenia (Docker Desktop 29.9, arm64), wszystko ✅:
 |---|---|
 | start z pustym wolumenem | autoimport 22 projektów, healthcheck „healthy” |
 | Steklin (RM-2026-003) | 5 ogłoszeń, +40,3% wypłaty, 277 dni opóźnienia – jak lokalnie |
-| analiza LLM | model pobrany do wolumenu i sprawdzony (5,5 min), 3 propozycje: R07 ×2, R04 |
+| analiza LLM (Qwen, pierwsza wersja) | model pobrany do wolumenu i sprawdzony (5,5 min), 3 propozycje: R07 ×2, R04 |
+| analiza LLM (Bielik-11B, 21.11) | model z `data/llm` hosta, CPU, 3 fragmenty RM-2026-003 (1 duplikat) w 4 min 53 s, 2 propozycje: R04 i R07, pewność wysoka; pamięć kontenera 3,6 GB |
 | `docker compose restart` oraz `down` + `up` | dane, propozycje i model zachowane; brak ponownego importu; ponowna analiza z zapisanych wyników w 0,01 s |
 
 ## Uruchomienie lokalne (praca nad kodem)
