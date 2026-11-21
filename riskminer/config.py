@@ -29,3 +29,5 @@ LLM_MODEL = os.environ.get("LLM_MODEL", "claude-sonnet-5-5")
 LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
 
 USER_AGENT = os.environ.get("RISKMINER_USER_AGENT", "RiskMiner-prototype/0.1 (hackathon)")
+
+BIP_SOURCES_FILE = Path(os.environ.get("BIP_SOURCES_FILE", BASE_DIR / "bip_sources.json"))

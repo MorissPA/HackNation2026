@@ -229,7 +229,7 @@ def case_profiles(con) -> list:
                   for c in contracts if c["actual_end"] and c["planned_end"]]
         evs = [dict(e) for e in con.execute(
             "SELECT id, title, expert_title, status, event_date, source_notice, source_url, source_section, quote "
-            "FROM event WHERE project_id=? AND kind='propozycja' AND status<>'odrzucone'", (p["project_id"],))]
+            "FROM visible_event WHERE project_id=? AND kind='propozycja' AND status<>'odrzucone'", (p["project_id"],))]
         risk_hits = {}
         for e in evs:
             code = (e["expert_title"] or e["title"]).split()[0]
@@ -248,7 +248,7 @@ def case_profiles(con) -> list:
             "planned_months": round(sum(x for x in planned if x) / len([x for x in planned if x]), 1) if any(planned) else None,
             "delay_days": max(delays) if delays else None, "risks": risk_hits,
             "n_offers": next((f["value_num"] for f in con.execute(
-                "SELECT value_num FROM fact WHERE project_id=? AND key='liczba_ofert'", (p["project_id"],))), None),
+                "SELECT value_num FROM visible_fact WHERE project_id=? AND key='liczba_ofert'", (p["project_id"],))), None),
         })
     return out
 

@@ -135,13 +135,30 @@ const DOC_STATUS: Record<string, string> = {
   ok: "", skan: "skan – bez warstwy tekstowej", format: "format nieodczytywany", "błąd": "błąd odczytu",
 };
 
-function Documents({ documents }: { documents: Row[] }) {
+type ReviewProps = { pid: string; onReviewed: () => void };
+
+function Documents({ documents, pid, onReviewed }: { documents: Row[] } & ReviewProps) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function review(url: string, action: "accept" | "reject") {
+    setBusy(true);
+    setError("");
+    try {
+      await api.decideDocument(pid, url, action);
+      onReviewed();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
   if (!documents.length) return null;
   return (
     <div style={{ display: "grid", gap: 8 }}>
       <h4>Dokumenty z BIP ({documents.length})</h4>
       <p className="small muted">Drugie źródło: dokumenty z Biuletynu Informacji Publicznej zamawiającego, w których występuje miejscowość
         projektu razem z jego zakresem („przedsięwzięcie”) albo z obiektem, od którego projekt zależy według opisu KPO („powiązana inwestycja”).</p>
+      {error && <ErrorBox error={error} />}
       {documents.map((d) => (
         <div key={d.url} className="event" style={{ padding: "8px 12px", display: "grid", gap: 4 }}>
           <div className="row between">
@@ -150,17 +167,23 @@ function Documents({ documents }: { documents: Row[] }) {
           </div>
           <div className="row small">
             <span className={`chip ${d.relation === "przedsięwzięcie" ? "info" : "neutral"}`}>{d.relation}</span>
-            <span className="muted">{d.source} › {d.section}{d.page ? ` › str. ${d.page}` : ""}</span>
+            <span className="muted">{d.source} › {d.section}{d.location ? ` › ${d.location}` : d.page ? ` › str. ${d.page}` : ""}</span>
             {DOC_STATUS[d.status] ? <span className="chip warn">{DOC_STATUS[d.status]}</span> : null}
           </div>
-          {d.page ? <div className="quote">{d.quote}</div> : null}
+          <div className="quote">{d.quote}</div>
+          <div className="row small">
+            {d.reason && <span>Podstawa powiązania: {d.reason}</span>}
+            <DecisionChip status={d.review_status} />
+            <button className="btn" disabled={busy || d.review_status === "zaakceptowane"} onClick={() => review(d.url, "accept")}>Potwierdź powiązanie</button>
+            <button className="btn" disabled={busy || d.review_status === "odrzucone"} onClick={() => review(d.url, "reject")}>Odrzuć powiązanie</button>
+          </div>
         </div>
       ))}
     </div>
   );
 }
 
-function Sources({ notices, documents }: { notices: Row[]; documents: Row[] }) {
+function Sources({ notices, documents, pid, onReviewed }: { notices: Row[]; documents: Row[] } & ReviewProps) {
   const [open, setOpen] = useState<string | null>(null);
   return (
     <div style={{ display: "grid", gap: 8 }}>
@@ -182,13 +205,14 @@ function Sources({ notices, documents }: { notices: Row[]; documents: Row[] }) {
         </div>
       ))}
       {!notices.length ? <div className="empty">Brak ogłoszeń.</div> : null}
-      <Documents documents={documents} />
+      <Documents documents={documents} pid={pid} onReviewed={onReviewed} />
     </div>
   );
 }
 
 export function ProjectCard({ pid, refreshKey, onFetch, fetching }:
   { pid: string; refreshKey: number; onFetch: (id: string) => void; fetching: boolean }) {
+  const [revision, setRevision] = useState(0);
   const [card, setCard] = useState<Card | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("timeline");
@@ -197,7 +221,7 @@ export function ProjectCard({ pid, refreshKey, onFetch, fetching }:
     setError(null);
     api.card(pid).then((c) => alive && setCard(c)).catch((e) => alive && setError(String(e.message ?? e)));
     return () => { alive = false; };
-  }, [pid, refreshKey]);
+  }, [pid, refreshKey, revision]);
 
   if (error) return <ErrorBox error={error} />;
   if (!card || card.project.project_id !== pid) return <div className="panel"><Spinner /></div>;
@@ -257,7 +281,7 @@ export function ProjectCard({ pid, refreshKey, onFetch, fetching }:
               </tbody></table></div>
             <p className="small muted">Ta sama zmiana może występować dwa razy: w ogłoszeniu o zmianie umowy (z datą) i w zbiorczym wykazie w ogłoszeniu o wykonaniu (z numerem).</p>
           </div>) : <div className="empty">Brak zmian umowy w pobranych ogłoszeniach.</div>)}
-        {tab === "sources" && <Sources notices={card.notices} documents={card.documents ?? []} />}
+        {tab === "sources" && <Sources pid={pid} onReviewed={() => setRevision(r => r + 1)} notices={card.notices} documents={card.documents ?? []} />}
       </div>
     </div>
   );

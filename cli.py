@@ -43,8 +43,8 @@ def main():
         for t, q in [
             ("POWIĄZANIA", "SELECT ocid, method, status, evidence FROM project_link WHERE project_id=?"),
             ("UMOWY", "SELECT c.part_no, contractor_name, signed_date, value, planned_end, actual_end, on_time, paid_total, n_changes, performing_notice FROM contract c JOIN project_link l ON l.ocid=c.ocid WHERE l.project_id=?"),
-            ("FAKTY", "SELECT kind, part_no, label, COALESCE(value_num, value_text) v, unit, source_notice, source_section FROM fact WHERE project_id=? ORDER BY kind, key"),
-            ("ZDARZENIA", "SELECT event_date, event_type, kind, title, details FROM event WHERE project_id=? ORDER BY COALESCE(event_date,'9999'), id"),
+            ("FAKTY", "SELECT kind, part_no, label, COALESCE(value_num, value_text) v, unit, source_notice, source_section FROM visible_fact WHERE project_id=? ORDER BY kind, key"),
+            ("ZDARZENIA", "SELECT event_date, event_type, kind, title, details FROM visible_event WHERE project_id=? ORDER BY COALESCE(event_date,'9999'), id"),
             ("BRAKI", "SELECT key, message FROM gap WHERE project_id=?"),
         ]:
             print(f"\n## {t}")

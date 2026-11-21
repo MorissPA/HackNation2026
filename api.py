@@ -40,7 +40,7 @@ def stats(con=Depends(get_con)):
         "fetched": one("SELECT count(*) FROM project WHERE last_fetch_status='ok'"),
         "links_confirmed": one("SELECT count(*) FROM project_link WHERE status='potwierdzone'"),
         "links_proposed": one("SELECT count(*) FROM project_link WHERE status='proponowane'"),
-        "proposals_open": one("SELECT count(*) FROM event WHERE kind='propozycja' AND status='do_weryfikacji'"),
+        "proposals_open": one("SELECT count(*) FROM visible_event WHERE kind='propozycja' AND status='do_weryfikacji'"),
         "sample_available": SAMPLE.exists(),
     }
 
@@ -76,7 +76,7 @@ def projects(con=Depends(get_con)):
                p.last_fetch_status, p.last_fetch_message, p.last_fetch_at,
                l.status AS link_status, l.method AS link_method,
                (SELECT count(*) FROM gap g WHERE g.project_id=p.project_id) AS n_gaps,
-               (SELECT count(*) FROM event e WHERE e.project_id=p.project_id AND e.kind='propozycja'
+               (SELECT count(*) FROM visible_event e WHERE e.project_id=p.project_id AND e.kind='propozycja'
                   AND e.status='do_weryfikacji') AS n_open
         FROM project p
         LEFT JOIN project_link l ON l.project_id=p.project_id AND l.status<>'odrzucone'
@@ -107,20 +107,17 @@ def project_card(pid: str, con=Depends(get_con)):
     contracts = rows(con, f"SELECT c.* FROM contract c {join} ORDER BY c.part_no", (pid,))
     changes = rows(con, f"SELECT ch.*, c.part_no FROM contract_change ch JOIN contract c ON c.id=ch.contract_id {join} "
                         "ORDER BY c.part_no, ch.source_notice, ch.change_no", (pid,))
-    facts = rows(con, "SELECT * FROM fact WHERE project_id=? ORDER BY kind<>'fakt', part_no, key", (pid,))
-    events = rows(con, "SELECT * FROM event WHERE project_id=? ORDER BY COALESCE(event_date,'9999-12-31'), id", (pid,))
+    facts = rows(con, "SELECT * FROM visible_fact WHERE project_id=? ORDER BY kind<>'fakt', part_no, key", (pid,))
+    events = rows(con, "SELECT * FROM visible_event WHERE project_id=? ORDER BY COALESCE(event_date,'9999-12-31'), id", (pid,))
     notices = []
     for l in links:
         notices += rows(con, "SELECT notice_number, notice_type, publication_date, source_url, fetched_at FROM notice "
                              "WHERE ocid=? ORDER BY publication_date", (l["ocid"],))
     for n in notices:
         n["label"] = pipeline.NOTICE_LABELS.get(n["notice_type"], n["notice_type"])
-    try:
-        documents = rows(con, "SELECT d.url, d.source, d.title, d.section, d.published_at, d.ext, d.status, d.fetched_at, "
-                              "l.relation, l.page, l.quote FROM document_link l JOIN document d ON d.url=l.url "
-                              "WHERE l.project_id=? ORDER BY d.published_at", (pid,))
-    except Exception:  # baza bez tabel BIP (żaden BIP nie był jeszcze przeszukany)
-        documents = []
+    documents = rows(con, "SELECT d.url, d.source, d.title, d.section, d.published_at, d.ext, d.status, d.fetched_at, "
+                          "l.reason, l.location, l.review_status, l.relation, l.page, l.quote FROM document_link l JOIN document d ON d.url=l.url "
+                          "WHERE l.project_id=? ORDER BY d.published_at", (pid,))
     return {
         "project": p,
         "kpo_value": matcher.kpo_value(p.get("annotation")),
@@ -205,7 +202,7 @@ def job_status(job_id: str):
 # --------------------------------------------------------------------------- ekspert
 @app.get("/api/proposals")
 def proposals(status: str = "do_weryfikacji", con=Depends(get_con)):
-    out = rows(con, "SELECT e.*, p.name AS project_name FROM event e JOIN project p USING(project_id) "
+    out = rows(con, "SELECT e.*, p.name AS project_name FROM visible_event e JOIN project p USING(project_id) "
                     "WHERE e.kind='propozycja' AND e.status=? ORDER BY e.project_id, COALESCE(e.event_date,''), e.id",
                (status,))
     for e in out:
@@ -226,6 +223,27 @@ def event_decision(event_id: int, d: EventDecision, con=Depends(get_con)):
         return {"status": expert.decide_event(con, event_id, d.action, d.code, d.comment)}
     except ValueError as e:
         raise HTTPException(400, str(e))
+
+
+class DocumentDecision(BaseModel):
+    url: str
+    action: str
+
+
+@app.post("/api/projects/{pid}/documents/decision")
+def document_decision(pid: str, decision: DocumentDecision, con=Depends(get_con)):
+    statuses = {"accept": "zaakceptowane", "reject": "odrzucone"}
+    if decision.action not in statuses:
+        raise HTTPException(400, "Nieznana decyzja")
+    status = statuses[decision.action]
+    with con:
+        updated = con.execute("UPDATE document_link SET review_status=? WHERE project_id=? AND url=?",
+                              (status, pid, decision.url))
+        if not updated.rowcount:
+            raise HTTPException(404, "Nie znaleziono powiązania dokumentu z projektem")
+        con.execute("INSERT INTO document_review(project_id,url,status,reviewed_at) VALUES(?,?,?,?)",
+                    (pid, decision.url, status, db.now()))
+    return {"status": status}
 
 
 @app.get("/api/kpo-links")

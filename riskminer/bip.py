@@ -23,29 +23,6 @@ import requests
 from . import config, db
 from .matcher import _fold, places, stem
 
-SOURCES_FILE = config.BASE_DIR / "bip_sources.json"
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS document (
-    url           TEXT PRIMARY KEY,
-    source        TEXT NOT NULL,           -- np. 'BIP Gminy Zagrodno'
-    title         TEXT,
-    section       TEXT,
-    published_at  TEXT,
-    ext           TEXT,
-    status        TEXT,                    -- ok / skan / format / błąd
-    pages_json    TEXT,                    -- treść strona po stronie
-    fetched_at    TEXT
-);
-CREATE TABLE IF NOT EXISTS document_link (
-    project_id  TEXT NOT NULL REFERENCES project(project_id) ON DELETE CASCADE,
-    url         TEXT NOT NULL REFERENCES document(url) ON DELETE CASCADE,
-    relation    TEXT NOT NULL,             -- przedsięwzięcie / powiązana inwestycja: ...
-    page        INTEGER,
-    quote       TEXT,
-    updated_at  TEXT,
-    PRIMARY KEY (project_id, url)
-);
-"""
 # zakres projektu -> wzorzec w tekście dokumentu
 SCOPE = {
     "kanalizacja": r"kanalizac|kanał\w* sanitarn|ście\w* sanitarn|przepompown",
@@ -61,7 +38,7 @@ MAX_PAGES = 400
 
 def sources():
     try:
-        data = json.loads(Path(SOURCES_FILE).read_text(encoding="utf-8"))
+        data = json.loads(Path(config.BIP_SOURCES_FILE).read_text(encoding="utf-8"))
     except FileNotFoundError:
         return {}
     return {k: v for k, v in data.items() if not k.startswith("_")}
@@ -76,7 +53,6 @@ class DBip:
 
     def __init__(self, con, base_url, name, log=lambda m: None):
         self.con, self.base, self.name, self.log = con, base_url.rstrip("/") + "/", name, log
-        con.executescript(SCHEMA)
         self.session = requests.Session()
         self.session.headers["User-Agent"] = config.USER_AGENT
         self.n_network = 0
@@ -110,8 +86,7 @@ class DBip:
             try:
                 s = self._get(page)
             except requests.RequestException as e:
-                self.log(f"BIP: nie udało się pobrać {page}: {e}")
-                continue
+                raise RuntimeError(f"Niepełny odczyt BIP na stronie {page}: {e}") from e
             body = re.sub(r"<script.*?</script>|<style.*?</style>", "", s, flags=re.S)
             h1 = re.search(r"<h1[^>]*>(.*?)</h1>", body, re.S)
             section = html.unescape(re.sub(r"<[^>]+>|\s+", " ", h1.group(1))).strip() if h1 else ""
@@ -132,13 +107,15 @@ class DBip:
                     queue.append(nxt)
                     # podstrona stronicowania dziedziczy nazwę sekcji
                     labels.setdefault(nxt, section if re.search(r",p\d+\.html$", nxt) else label)
+        if queue:
+            raise RuntimeError(f"Przegląd BIP przekroczył limit {MAX_PAGES} stron")
         self.log(f"{self.name}: {len(seen)} stron, {len(files)} załączników")
         return list(files.values())
 
     def document(self, att):
         """Treść dokumentu (cache bez TTL – opublikowany plik się nie zmienia)."""
         row = self.con.execute("SELECT * FROM document WHERE url=?", (att["url"],)).fetchone()
-        if row:
+        if row and row["status"] != "błąd":
             return dict(row)
         pages, status = [], "ok"
         try:
@@ -146,7 +123,7 @@ class DBip:
             if att["ext"] == "pdf":
                 from pypdf import PdfReader
                 pages = [p.extract_text() or "" for p in PdfReader(io.BytesIO(content)).pages]
-                if sum(len(p.strip()) for p in pages) < 50:
+                if not any(p.strip() for p in pages):
                     status, pages = "skan", []
             elif att["ext"] in ("docx", "odt"):
                 z = zipfile.ZipFile(io.BytesIO(content))
@@ -165,15 +142,17 @@ class DBip:
         return doc
 
 
-def _find(pages, place_rx, scope_rx, window=250):
+def _find(pages, place_rx, scope_rx, financial=False, window=250):
     """Pierwsze miejsce, gdzie miejscowość i zakres występują blisko siebie: (strona, cytat)."""
     for i, p in enumerate(pages, 1):
         t = re.sub(r"\s+", " ", p)
-        for m in re.finditer(place_rx, t, re.I):
-            a, b = max(0, m.start() - window), min(len(t), m.end() + window)
-            if re.search(scope_rx, t[a:b], re.I):
-                qa, qb = max(0, m.start() - 160), min(len(t), m.end() + 200)
-                return i, ("…" if qa else "") + t[qa:qb].strip() + ("…" if qb < len(t) else "")
+        # Numery pozycji w tabelach WPF oddzielają kwoty sąsiednich inwestycji.
+        rows = re.split(r"(?<!\S)(?=\d+\.\d+\.\d+\.\d+\.?\s)", t) if financial else [t]
+        for row in rows:
+            for m in re.finditer(place_rx, row, re.I):
+                a, b = max(0, m.start() - window), min(len(row), m.end() + window)
+                if re.search(scope_rx, row[a:b], re.I):
+                    return i, ("…" if a else "") + row[a:b].strip() + ("…" if b < len(row) else "")
     return None
 
 
@@ -185,16 +164,35 @@ def evidence_for_project(con, project, log=lambda m: None):
     client = DBip(con, src["url"], src["name"], log)
     pl = [p for p in places(project.get("name")) if _fold(p) not in _fold(project.get("recipient_name") or "")] \
         or places(project.get("name"))
-    if not pl:
-        return []
-    place_rx = "|".join(re.escape(stem(p)) for p in pl)
+    place_rx = "|".join(re.escape(stem(p)) for p in pl) or r"(?!)"
     own = _scopes(project.get("name"))
     related = _scopes(project.get("annotation")) - own   # obiekty, od których projekt zależy (z opisu KPO)
-    own_rx = "|".join(SCOPE[s] for s in own) or r"$^"
-    rel_rx = "|".join(SCOPE[s] for s in related) or r"$^"
+    own_rx = "|".join(SCOPE[s] for s in own) or r"(?!)"
+    rel_rx = "|".join(SCOPE[s] for s in related) or r"(?!)"
+
+    # Uwzględnij identyfikatory tylko dla aktywnych powiązań i właściwej części.
+    terms = [(project["public_id"], "identyfikator z arkusza")] if project.get("public_id") else []
+    for row in con.execute("""SELECT l.ocid, n.notice_number, c.contractor_name FROM project_link l
+            LEFT JOIN notice n ON l.ocid=n.ocid LEFT JOIN contract c ON c.ocid=l.ocid
+            AND (l.part_no=0 OR c.part_no=l.part_no)
+            WHERE l.project_id=? AND l.status<>'odrzucone'""", (project["project_id"],)):
+        terms.extend(zip(row, ("OCID", "numer BZP", "wykonawca")))
+    identifiers = {}
+    for value, label in terms:
+        if value:
+            identifiers.setdefault(" ".join(value.split()).casefold(), label)
+
+    def term_hit(text):
+        normalized = " ".join(text.split()).casefold()
+        for value, label in identifiers.items():
+            match = re.search(r"(?<!\w)" + re.escape(value) + r"(?!\w)", normalized)
+            if match:
+                return label, match
+        return None
 
     atts = client.attachments()
-    by_title = [a for a in atts if re.search(place_rx, a["title"], re.I) and re.search(f"{own_rx}|{rel_rx}", a["title"], re.I)]
+    by_title = [a for a in atts if term_hit(a["title"]) or (re.search(place_rx, a["title"], re.I)
+                and re.search(f"{own_rx}|{rel_rx}", a["title"], re.I))]
     finance = sorted([a for a in atts if re.search(FINANCE, a["title"], re.I)],
                      key=lambda a: a["published_at"] or "", reverse=True)[:MAX_FINANCE_DOCS]
     log(f"{src['name']}: {len(by_title)} dokumentów z miejscowością w tytule, {len(finance)} najnowszych planów finansowych")
@@ -203,15 +201,42 @@ def evidence_for_project(con, project, log=lambda m: None):
         doc = client.document(att)
         pages = json.loads(doc["pages_json"] or "[]")
         title_own = bool(re.search(own_rx, att["title"], re.I))
-        hit = _find(pages, place_rx, own_rx) or (None if title_own else _find(pages, place_rx, rel_rx))
-        if not hit and att not in by_title:
-            continue  # plan finansowy bez wzmianki o projekcie
+        title_related = bool(re.search(rel_rx, att["title"], re.I)) and not title_own
+        relation = "powiązana inwestycja: " + ", ".join(sorted(related))
+        reason = "miejscowość i zakres inwestycji zależnej"
+        hit = None
+        for i, text in enumerate(pages, 1):
+            text = " ".join(text.split())
+            found = term_hit(text)
+            if found:
+                label, match = found
+                hit = i, text[max(0, match.start()-100):match.end()+120]
+                reason = label
+                relation = "kandydat według wykonawcy" if label == "wykonawca" else "przedsięwzięcie"
+                break
+        financial = bool(re.search(FINANCE, doc["title"], re.I))
+        if not hit and not title_related:
+            hit = _find(pages, place_rx, own_rx, financial)
+            if hit:
+                reason = "miejscowość i zakres projektu"
+                relation = "przedsięwzięcie"
+        if not hit:
+            hit = _find(pages, place_rx, rel_rx, financial)
         if hit:
             page, quote = hit
-            relation = "przedsięwzięcie" if re.search(own_rx, quote, re.I) else "powiązana inwestycja: " + ", ".join(sorted(related))
-        else:
+        elif att in by_title:
             page, quote = None, att["title"]
-            relation = "przedsięwzięcie" if title_own else "powiązana inwestycja: " + ", ".join(sorted(related))
-        out.append({"doc": doc, "relation": relation, "page": page, "quote": quote})
+            title_term = term_hit(quote)
+            if title_term:
+                reason = title_term[0]
+                relation = "kandydat według wykonawcy" if title_term[0] == "wykonawca" else "przedsięwzięcie"
+            elif title_own:
+                reason = "miejscowość i zakres projektu"
+                relation = "przedsięwzięcie"
+        else:
+            continue
+        location = f"str. {page}" if page and doc["ext"] == "pdf" else "treść dokumentu" if hit else "tytuł dokumentu"
+        out.append({"doc": doc, "relation": relation, "page": page if doc["ext"] == "pdf" else None,
+                    "quote": quote, "reason": reason, "location": location})
     log(f"{src['name']}: powiązanych dokumentów {len(out)} (zapytań sieciowych {client.n_network})")
     return out

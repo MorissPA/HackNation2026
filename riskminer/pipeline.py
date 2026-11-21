@@ -131,14 +131,15 @@ def fetch_project(con, project_id: str, client: BZPClient, log=print) -> dict:
     try:
         summary = _run(con, client, card, p, log)
         status, msg = "ok", summary.get("message", "")
-        # wpisy, których ten przebieg już nie wytworzył, a ekspert ich nie ocenił -> usuwamy;
-        # ocenione zostają (zachowanie historii decyzji przy przeliczeniu przypadku)
-        for t in ("fact", "event"):
-            con.execute(f"DELETE FROM {t} WHERE project_id=? AND updated_at<? AND status='do_weryfikacji'",
-                        (project_id, card.ts))
     except BZPError as e:
         status, msg, summary = "błąd", f"BZP: {e}", {}
         card.gap("bzp_error", msg)
+    bip_complete = _bip_evidence(con, card, p, log)
+    # Nie kasuj wcześniejszych dowodów po niedostępności źródła.
+    for table in ("fact", "event"):
+        con.execute(f"""DELETE FROM {table} WHERE project_id=? AND updated_at<? AND status='do_weryfikacji'
+                    AND ((source_notice LIKE 'BIP: %' AND ?) OR (source_notice NOT LIKE 'BIP: %' AND ?))""",
+                    (project_id, card.ts, bip_complete, status == "ok"))
     con.execute(
         "UPDATE project SET last_fetch_at=?, last_fetch_status=?, last_fetch_message=? WHERE project_id=?",
         (db.now(), status, msg, project_id),
@@ -297,7 +298,6 @@ def _run(con, client, card: Card, p: dict, log):
     _timeline_and_risks(con, card, p, ocid, base_n, by_type, contracts)
     _gaps(card, p, by_type, contracts)
     _project_vs_contracts(card, p, ocid, contracts)
-    _bip_evidence(con, card, p, ocid, log)
     return {"message": f"{len(notices)} ogłoszeń, {len(contracts)} umów"
                        + (" (powiązanie do potwierdzenia)" if link_status == "proponowane" else ""), "ocid": ocid,
             "notices": [(n["notice_type"], n["notice_number"]) for n in notices]}
@@ -657,16 +657,16 @@ def _risk_proposals(card, ocid, part, notice, fields, change_title, when=None):
                    field=src, details=f"Propozycja regułowa dla: {change_title}. Sygnał w tekście: „{frag}”.")
 
 
-def _bip_evidence(con, card, p, ocid, log):
+def _bip_evidence(con, card, p, log):
     """Drugie źródło: dokumenty z BIP gminy (jeśli BIP zamawiającego jest w bip_sources.json)."""
     from . import bip
     try:
         found = bip.evidence_for_project(con, p, log=log)
     except Exception as e:  # BIP niedostępny – karta z BZP i tak powstaje
         card.gap("bip_error", f"Nie udało się przeszukać BIP zamawiającego: {e}")
-        return
+        return False
     if found is None:
-        return  # BIP tej gminy nie jest skonfigurowany
+        return False  # BIP tej gminy nie jest skonfigurowany
     unreadable = []
     for f in found:
         d = f["doc"]
@@ -677,31 +677,33 @@ def _bip_evidence(con, card, p, ocid, log):
             unreadable.append(d["title"][:80])
         src = {"notice_number": f"BIP: {d['url'].rsplit('/', 1)[-1]}", "source_url": d["url"],
                "fetched_at": d["fetched_at"]}
-        section = f"{d['source']} › {d['section']}" + (f" › str. {f['page']}" if f["page"] else " › tytuł dokumentu")
+        section = f"{d['source']} › {d['section']} › {f['location']}"
         db.upsert(con, "document_link", {"project_id": p["project_id"], "url": d["url"], "relation": f["relation"],
-                                         "page": f["page"], "quote": f["quote"], "updated_at": card.ts},
+                                         "page": f["page"], "quote": f["quote"], "reason": f["reason"],
+                                         "location": f["location"], "updated_at": card.ts},
                   ["project_id", "url"], preserve=())
-        card.event("dokument BIP", d["title"][:160], when=d["published_at"], ocid=ocid, notice=src, quote=f["quote"],
+        card.event("dokument BIP", d["title"][:160], when=d["published_at"], ocid=None, notice=src, quote=f["quote"],
                    details=f"{f['relation'].capitalize()}." + (f" {status_note.capitalize()}." if status_note else ""))
         for code, frag in risks.propose(f"{d['title']} {f['quote']}"):
-            card.event("ryzyko", f"{code} {risks.NAMES[code]}", when=d["published_at"], kind="propozycja", ocid=ocid,
+            card.event("ryzyko", f"{code} {risks.NAMES[code]}", when=d["published_at"], kind="propozycja", ocid=None,
                        notice=src, quote=f["quote"],
                        details=f"Propozycja regułowa z dokumentu BIP ({f['relation']}). Sygnał w tekście: „{frag}”.")
         # łączne nakłady z WPF: „<nazwa> … <rok od> <rok do> <kwota>”
         m = re.search(r"(\d{4}) (\d{4}) (\d{1,3}(?: \d{3})+,\d{2})", f["quote"])
-        if m and re.search(r"Wieloletni|WPF", d["title"], re.I):
+        if m and re.match(r"^\d+\.\d+\.\d+\.\d+\.?\s", f["quote"]) and re.search(r"Wieloletni|WPF", d["title"], re.I):
             card.fact("fakt", "bip_wpf_naklady", f"Łączne nakłady w WPF ({f['relation']}), okres {m.group(1)}–{m.group(2)}",
-                      num=P.parse_money(m.group(3)), unit="PLN", level="projekt", ocid=ocid, notice=src, quote=f["quote"])
+                      num=P.parse_money(m.group(3)), unit="PLN", level=f["relation"], ocid=None, notice=src, quote=f["quote"])
         con.execute("UPDATE event SET source_section=? WHERE project_id=? AND source_notice=?",
                     (section, p["project_id"], src["notice_number"]))
         con.execute("UPDATE fact SET source_section=? WHERE project_id=? AND source_notice=?",
                     (section, p["project_id"], src["notice_number"]))
-    con.execute("DELETE FROM document_link WHERE project_id=? AND updated_at<?", (p["project_id"], card.ts))
+    con.execute("DELETE FROM document_link WHERE project_id=? AND updated_at<? AND review_status='do_weryfikacji'", (p["project_id"], card.ts))
     if unreadable:
         card.gap("bip_nieczytelne", f"{len(unreadable)} dokumentów z BIP to skany lub pliki .doc – OCR nie jest obsługiwany, "
                                     f"więc dowodem jest tytuł i data publikacji (np. „{unreadable[0]}”).")
     if not found:
         card.gap("bip_brak", "W BIP zamawiającego nie znaleziono dokumentów wspominających miejscowość i zakres projektu.")
+    return True
 
 
 def _project_vs_contracts(card, p, ocid, contracts):

@@ -50,6 +50,8 @@ export const api = {
   startFetch: (ids: string[] | "all") => post<Job>("/api/fetch", ids === "all" ? { all: true } : { project_ids: ids }),
   job: (id: string) => call<Job>(`/api/jobs/${id}`),
   proposals: (status: string) => call<Row[]>(`/api/proposals?status=${encodeURIComponent(status)}`),
+  decideDocument: (pid: string, url: string, action: "accept" | "reject") =>
+    post<{status: string}>(`/api/projects/${encodeURIComponent(pid)}/documents/decision`, {url, action}),
   decideEvent: (id: number, action: "accept" | "reject", code?: string, comment?: string) =>
     post<{ status: string }>(`/api/events/${id}/decision`, { action, code, comment }),
   analyze: (text: string) => post<Row>("/api/analysis", { text }),

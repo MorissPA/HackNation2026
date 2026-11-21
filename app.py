@@ -42,7 +42,7 @@ st.sidebar.title("⛏️ Risk Miner")
 view = st.sidebar.radio("Widok", ["Baza inwestycji", "Weryfikacja eksperta", "Analiza nowego projektu"])
 n_proj = con.execute("SELECT count(*) FROM project").fetchone()[0]
 n_fetched = con.execute("SELECT count(*) FROM project WHERE last_fetch_status='ok'").fetchone()[0]
-n_todo = con.execute("SELECT (SELECT count(*) FROM event WHERE kind='propozycja' AND status='do_weryfikacji')").fetchone()[0]
+n_todo = con.execute("SELECT (SELECT count(*) FROM visible_event WHERE kind='propozycja' AND status='do_weryfikacji')").fetchone()[0]
 st.sidebar.caption(f"Projektów: {n_proj} · pobranych z BZP: {n_fetched} · propozycji do oceny: {n_todo}")
 
 
@@ -129,7 +129,7 @@ def project_card(pid):
 
     contracts = q("SELECT c.* FROM contract c JOIN project_link l ON l.ocid=c.ocid AND (l.part_no=0 OR l.part_no=c.part_no) "
                   "WHERE l.project_id=? AND l.status<>'odrzucone' ORDER BY c.part_no", (pid,))
-    facts = q("SELECT * FROM fact WHERE project_id=?", (pid,))
+    facts = q("SELECT * FROM visible_fact WHERE project_id=?", (pid,))
     fx = {(f["key"], f["part_no"]): f for f in facts}
 
     for c in contracts:
@@ -159,7 +159,7 @@ def project_card(pid):
 
     t1, t2, t3, t4 = st.tabs(["Oś czasu", "Fakty i obliczenia", "Zmiany umowy", "Źródła (ogłoszenia)"])
     with t1:
-        ev = q("SELECT * FROM event WHERE project_id=? ORDER BY COALESCE(event_date,'9999-12-31'), id", (pid,))
+        ev = q("SELECT * FROM visible_event WHERE project_id=? ORDER BY COALESCE(event_date,'9999-12-31'), id", (pid,))
         show_types = st.multiselect("Typy zdarzeń", sorted({e["event_type"] for e in ev}),
                                     default=sorted({e["event_type"] for e in ev} - {"ogłoszenie"}))
         for e in ev:
@@ -299,7 +299,7 @@ def view_risks():
     st.caption("Propozycje (np. przypisanie zdarzenia do kategorii ryzyka) obok fragmentu dokumentu. "
                "Decyzje są zapisywane z historią i nie są nadpisywane przy ponownym pobraniu danych.")
     status = st.radio("Status", ["do_weryfikacji", "zaakceptowane", "poprawione", "odrzucone"], horizontal=True)
-    props = q("SELECT e.*, p.name FROM event e JOIN project p USING(project_id) WHERE e.kind='propozycja' AND e.status=? "
+    props = q("SELECT e.*, p.name FROM visible_event e JOIN project p USING(project_id) WHERE e.kind='propozycja' AND e.status=? "
               "ORDER BY e.project_id, e.event_date", (status,))
     if not props:
         st.info("Brak propozycji w tym statusie.")

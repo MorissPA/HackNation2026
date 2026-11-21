@@ -227,6 +227,39 @@ CREATE TABLE IF NOT EXISTS event (
     UNIQUE(project_id, event_type, part_no, source_notice, title)
 );
 
+
+CREATE TABLE IF NOT EXISTS document (
+    url           TEXT PRIMARY KEY,
+    source        TEXT NOT NULL,           -- np. 'BIP Gminy Zagrodno'
+    title         TEXT,
+    section       TEXT,
+    published_at  TEXT,
+    ext           TEXT,
+    status        TEXT,                    -- ok / skan / format / błąd
+    pages_json    TEXT,                    -- treść strona po stronie
+    fetched_at    TEXT
+);
+CREATE TABLE IF NOT EXISTS document_link (
+    project_id  TEXT NOT NULL REFERENCES project(project_id) ON DELETE CASCADE,
+    url         TEXT NOT NULL REFERENCES document(url) ON DELETE CASCADE,
+    relation    TEXT NOT NULL,             -- przedsięwzięcie / powiązana inwestycja: ...
+    page        INTEGER,
+    quote       TEXT,
+    reason      TEXT,
+    location    TEXT,
+    review_status TEXT NOT NULL DEFAULT 'do_weryfikacji',
+    updated_at  TEXT,
+    PRIMARY KEY (project_id, url)
+);
+
+CREATE TABLE IF NOT EXISTS document_review (
+    id INTEGER PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    url TEXT NOT NULL,
+    status TEXT NOT NULL,
+    reviewed_at TEXT NOT NULL,
+    FOREIGN KEY(project_id, url) REFERENCES document_link(project_id, url) ON DELETE CASCADE
+);
 -- Brakujące dane – widoczne w karcie projektu.
 CREATE TABLE IF NOT EXISTS gap (
     project_id  TEXT NOT NULL REFERENCES project(project_id) ON DELETE CASCADE,
@@ -276,6 +309,20 @@ def _migrate(con):
     for col, typ in (("confidence", "TEXT"), ("matched", "INTEGER"), ("checked", "INTEGER")):
         if col not in cols:
             con.execute(f"ALTER TABLE link_candidate ADD COLUMN {col} {typ}")
+    cols = {r["name"] for r in con.execute("PRAGMA table_info(document_link)")}
+    if not {"reason", "location", "review_status"}.issubset(cols):
+        if not con.in_transaction:
+            con.execute("BEGIN IMMEDIATE")
+        cols = {r["name"] for r in con.execute("PRAGMA table_info(document_link)")}
+        for name, typ in (("reason", "TEXT"), ("location", "TEXT"),
+                          ("review_status", "TEXT NOT NULL DEFAULT 'do_weryfikacji'")):
+            if name not in cols:
+                con.execute(f"ALTER TABLE document_link ADD COLUMN {name} {typ}")
+    for table in ("event", "fact"):
+        con.execute(f"""CREATE VIEW IF NOT EXISTS visible_{table} AS SELECT item.* FROM {table} item
+                        WHERE NOT EXISTS (SELECT 1 FROM document_link link
+                        WHERE link.project_id=item.project_id AND link.url=item.source_url
+                        AND link.review_status='odrzucone')""")
     con.commit()
 
 

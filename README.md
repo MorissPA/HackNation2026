@@ -96,18 +96,20 @@ Oficjalne API jest zapasem: używamy go, gdy kopia nie odpowiada albo nie znajdu
 
 ## Drugie źródło: BIP gminy
 
-Konfiguracja jest w [bip_sources.json](bip_sources.json): NIP zamawiającego → adres BIP. Na razie obsługujemy system **d-bip.pl** (sekcje `?strona=N`, stronicowanie `,m0,sN,pK.html`, załączniki `pliki/…`), z którego korzysta wiele gmin. Kolejną gminę dodaje się wpisem w tym pliku, bez zmian w kodzie. Kod jest w [riskminer/bip.py](riskminer/bip.py).
+Konfiguracja jest w [bip_sources.json](bip_sources.json): NIP zamawiającego → adres BIP. Na razie obsługujemy system **d-bip.pl** (sekcje `?strona=N`, stronicowanie `,m0,sN,pK.html`, załączniki `pliki/…`), z którego korzysta wiele gmin. Kolejną gminę dodaje się wpisem w tym pliku. Zmienna `BIP_SOURCES_FILE` pozwala podać inny plik konfiguracji. Kod jest w [riskminer/bip.py](riskminer/bip.py).
 
 Przy pobieraniu projektu, którego zamawiający ma skonfigurowany BIP:
 1. Przeglądamy wszystkie sekcje i strony BIP, a dla każdego załącznika zapisujemy tytuł, sekcję i datę publikacji. Strony są w cache przez 24 h. Pierwszy przegląd BIP Zagrodna (390 stron, 1670 załączników) trwa ok. 5 minut, kolejne korzystają z cache.
 2. Czytamy dwa rodzaje dokumentów:
-   - te, których tytuł wspomina miejscowość projektu razem z jego zakresem albo z obiektem powiązanym,
+   - załączniki z numerem projektu, postępowania lub nazwą wykonawcy w tytule oraz te, których tytuł wymienia miejscowość i zakres projektu lub zależny obiekt,
    - 4 najnowsze plany finansowe (WPF, plan postępowań).
    PDF czytamy strona po stronie, a do tego DOCX i ODT. Skany bez warstwy tekstowej i pliki `.doc` zostają z tytułem i datą jako dowodem i trafiają do braków.
 3. Powiązanie z projektem ma cytat i numer strony:
    - **przedsięwzięcie**: miejscowość i zakres projektu (np. kanalizacja w Modlikowicach),
    - **powiązana inwestycja**: miejscowość i obiekt, od którego projekt zależy według opisu KPO (np. oczyszczalnia, do której wpięta będzie sieć).
-4. Każdy dokument daje zdarzenie `dokument BIP` na osi czasu. Reguły ryzyk działają też na tytule i cytacie, np. „zmiana terminu załatwienia sprawy” daje R04. Kwota z WPF trafia do faktów na poziomie projektu.
+4. Każdy dokument daje zdarzenie `dokument BIP` na osi czasu. Reguły ryzyk działają też na tytule i cytacie, np. „zmiana terminu załatwienia sprawy” daje R04. Kwotę WPF odczytujemy z pozycji tabeli zawierającej dowód. Dla zależnej inwestycji kwota ma odrębny poziom i nie zasila kosztu umowy.
+5. W zakładce **Źródła** można potwierdzić lub odrzucić powiązanie z BIP. Decyzja przechodzi do historii i obowiązuje po kolejnym pobraniu. Odrzucony dokument pozostaje dostępny do ponownej oceny. Jego fakty i zdarzenia są pomijane na karcie i w analizie. Dopasowanie jedynie po wykonawcy jest kandydaturą do sprawdzenia.
+6. Analiza treści dotyczy wybranych załączników. Identyfikator występujący wyłącznie wewnątrz pominiętego dokumentu może pozostać niewykryty. Przy skanie lub nieobsługiwanym formacie karta wskazuje ograniczenie i tytuł z wykazu BIP.
 
 Wynik dla Modlikowic:
 - 10 dokumentów: postępowanie środowiskowe dla oczyszczalni (obwieszczenia, decyzja, zmiana terminu załatwienia sprawy), zapytanie na przyłącze elektryczne oczyszczalni i 3 uchwały WPF,
@@ -141,7 +143,7 @@ Ogłoszenie o wykonaniu umowy, które podaje „wykonana należycie: Nie” albo
 
 ## Model danych
 
-Tabele: `project`, `procedure` (OCID), `project_link` (z metodą dopasowania, dowodem i statusem), `notice`, `contract` (OCID + część), `contract_change`, `fact`, `event`, `gap`, `expert_decision`, `import_run`/`import_row` i `http_cache`.
+Tabele: `project`, `procedure` (OCID), `project_link` (z metodą dopasowania, dowodem i statusem), `notice`, `contract` (OCID + część), `contract_change`, `fact`, `event`, `gap`, `expert_decision`, `import_run`/`import_row` i `http_cache`. Dokumenty BIP, powiązania i historię weryfikacji przechowują `document`, `document_link` i `document_review`.
 
 - `fact.kind` przyjmuje jedną z trzech wartości:
   - **fakt** to odczyt ze znanego pola ogłoszenia z cytatem i punktem,
