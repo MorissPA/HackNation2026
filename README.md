@@ -94,7 +94,7 @@ Powtórzenie analizy wykorzystuje zapisane wyniki dla tego samego tekstu, dostaw
 | `riskminer/bip.py` | Drugie źródło: BIP gminy (d-bip.pl) – przegląd sekcji, odczyt dokumentów, powiązanie z projektem z cytatem i stroną. |
 | `riskminer/expert.py` | Decyzje eksperta (ryzyka, powiązania KPO) – wspólne dla API i Streamlit. |
 | `api.py` | REST API (FastAPI) dla interfejsu w Vite; serwuje też zbudowany `web/dist`. |
-| `web/` | Interfejs: Vite + React + TypeScript (Baza inwestycji z kartą projektu, Weryfikacja eksperta, Analiza nowego projektu). |
+| `web/` | Interfejs: Vite + React + TypeScript – cztery zakładki: Nowa inwestycja (ocena ryzyk, checklista, podobne przypadki, eksport), Do weryfikacji (kolejka eksperta z dowodem w kontekście dokumentu), Baza projektów (filtry, szuflada z hierarchią powiązań, pełna karta przypadku), Dane i reguły (import, synchronizacja BZP, otwarty katalog ryzyk, reguły dla modelu). Przełącznik rozmiaru tekstu i tryb wysokiego kontrastu. |
 | `app.py` | Wcześniejszy interfejs w Streamlit (te same funkcje, ta sama baza). |
 
 ## Źródło: BZP – jak łączymy ogłoszenia
@@ -200,7 +200,7 @@ Ogłoszenie o wykonaniu umowy, które podaje „wykonana należycie: Nie” albo
 
 ## Eksport bazy przypadków
 
-W interfejsie (Baza inwestycji → „Eksport całej bazy przypadków”), przez API (`/api/export?format=json` lub `csv`) albo z terminala:
+W interfejsie (Baza projektów → „Cała baza JSON / CSV (ZIP)”), przez API (`/api/export?format=json` lub `csv`) albo z terminala:
 
 ```bash
 .venv/bin/python cli.py export        # docs/przyklad_eksportu/risk_miner_baza.json i risk_miner_baza_csv.zip

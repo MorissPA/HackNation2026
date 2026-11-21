@@ -1,205 +1,280 @@
 import { useState } from "react";
 import { api, type Row } from "./api";
-import { ConfidenceChip, ErrorBox, Evidence, LinkChip, OriginTag, STATUS_ICON, Spinner, mln, num, pln } from "./ui";
+import { Chevron, ConfidenceChip, Evidence, OriginTag, Spinner, download, mln, num, pln, useToast } from "./ui";
 
 const EXAMPLES: { label: string; text: string }[] = [
   {
-    label: "Nowa oczyszczalnia",
-    text: "Gmina planuje budowę nowej biologicznej oczyszczalni ścieków dla 1200 RLM w formule zaprojektuj i wybuduj, " +
-      "wraz z przebudową kolektora kanalizacji sanitarnej. Oczyszczone ścieki będą odprowadzane do rzeki. " +
-      "Istniejąca oczyszczalnia musi pracować bez przerwy w trakcie budowy. Budżet 4,5 mln zł, termin realizacji 18 miesięcy.",
-  },
-  {
-    label: "Sieć wodociągowa",
+    label: "Sieć wodociągowa 6,5 km",
     text: "Rozbudowa sieci wodociągowej o długości 6,5 km w trzech miejscowościach wraz z 80 przyłączami. " +
       "Trasa w pasie drogi powiatowej i częściowo przez grunty prywatne, przejście pod linią kolejową. " +
       "Zasilanie z istniejącej SUW. Budżet 3 mln zł, termin 12 miesięcy.",
   },
   {
-    label: "Kanalizacja sanitarna",
+    label: "Oczyszczalnia 1200 RLM",
+    text: "Gmina planuje budowę nowej biologicznej oczyszczalni ścieków dla 1200 RLM w formule zaprojektuj i wybuduj, " +
+      "wraz z przebudową kolektora kanalizacji sanitarnej. Oczyszczone ścieki będą odprowadzane do rzeki. " +
+      "Istniejąca oczyszczalnia musi pracować bez przerwy w trakcie budowy. Budżet 4,5 mln zł, termin realizacji 18 miesięcy.",
+  },
+  {
+    label: "Kanalizacja 4,2 km",
     text: "Budowa sieci kanalizacji sanitarnej grawitacyjno-tłocznej o długości 4,2 km z 3 przepompowniami ścieków i 120 przyłączami " +
       "w miejscowości wiejskiej. Roboty na podstawie projektu budowlanego zamawiającego, kolizje z istniejącym uzbrojeniem, " +
       "budżet 6 mln zł, termin 14 miesięcy.",
   },
 ];
 
-const STRENGTH: Record<string, string> = { silna: "bad", "średnia": "warn", słaba: "neutral" };
+type Sub = "risks" | "checklist" | "similar" | "features";
+const SCALE_LABEL: Record<string, string> = {
+  length_km: "Długość sieci [km]", rlm: "Wielkość [RLM]", flow_m3d: "Przepustowość [m³/d]",
+  connections: "Przyłącza [szt.]", buildings: "Budynki / nieruchomości [szt.]",
+};
+const signed = (v: number, digits = 1) => `${v > 0 ? "+" : ""}${num(v, digits)}`;
 
-function Feature({ label, f }: { label: string; f: Row | null | undefined }) {
+function rangeText(st: Row | undefined, unit: string, digits = 1) {
+  if (!st || !st.n) return "brak danych";
+  if (st.median == null) return st.values.map((v: number) => `${signed(v, digits)} ${unit}`).join(" · ");
+  return `${signed(st.min, digits)} … ${signed(st.max, digits)} ${unit}`;
+}
+
+function FeatureRow({ label, f }: { label: string; f: Row | null | undefined }) {
   return (
     <tr>
-      <td className="muted small">{label}</td>
-      <td>{f ? <b>{typeof f.value === "number" ? num(f.value, 3) : f.value}</b> : <span className="chip warn">brak w opisie</span>}
+      <td className="t-sub" style={{ whiteSpace: "nowrap" }}>{label}</td>
+      <td>{f ? <b>{typeof f.value === "number" ? num(f.value, 3) : f.value}</b> : <span className="st-miss">brak w opisie</span>}
         {f?.assumed ? <span className="small muted"> (przyjęte z kontekstu)</span> : null}</td>
       <td className="small muted">{f?.source ?? ""}{f?.note ? <><br />{f.note}</> : null}</td>
     </tr>
   );
 }
 
-function Stat({ label, st, unit, fmt = (v: number) => num(v) }: { label: string; st: Row; unit: string; fmt?: (v: number) => string }) {
+function RiskCard({ fl, nSimilar }: { fl: Row; nSimilar: number }) {
+  const toast = useToast();
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(fl.clause); toast("Skopiowano propozycję zapisu do PPU / SWZ."); }
+    catch { toast("Nie udało się skopiować – zaznacz tekst ręcznie.", true); }
+  };
   return (
-    <div className="kpi">
-      <span className="l">{label} · n = {st.n}</span>
-      {st.n === 0 ? <span className="v">brak danych</span>
-        : st.median != null ? <>
-          <span className="v">{fmt(st.median)} {unit}</span>
-          <span className="small muted">mediana; zakres {fmt(st.min)} … {fmt(st.max)} {unit}</span>
-        </> : <span className="v" style={{ fontSize: 15 }}>{st.values.map((v: number) => `${fmt(v)} ${unit}`).join(" · ")}</span>}
-      {st.n > 0 && st.median != null ? <span className="small muted">wartości: {st.values.map((v: number) => fmt(v)).join(" · ")}</span> : null}
+    <article className={`risk s-${fl.strength}`}>
+      <div className="risk-head">
+        <div className="risk-title">
+          <span className="risk-code">{fl.code}</span>
+          <h3>{fl.name}</h3>
+          <span className={`chip ${fl.strength === "silna" ? "bad" : fl.strength === "średnia" ? "warn" : "neutral"}`}>sygnał {fl.strength}</span>
+          <OriginTag kind="wniosek" />
+        </div>
+        {fl.clause ? <button className="btn btn-sm" onClick={copy}>Kopiuj zapis do PPU</button> : null}
+      </div>
+      <dl className="dl">
+        <dt>Dane źródłowe</dt>
+        <dd>{fl.basis}
+          {fl.from_description?.length ? <div className="small muted">Z Twojego opisu: {fl.from_description.join(", ")}</div> : null}
+          {fl.evidence?.length ? (
+            <details style={{ marginTop: 6 }}>
+              <summary className="link">Pokaż dowody z dokumentów ({fl.evidence.length})</summary>
+              <div style={{ display: "grid", gap: 10, marginTop: 8 }}>
+                {fl.evidence.map((e: Row) => (
+                  <div key={e.event_id}>
+                    <div className="small"><a href={`#baza/${e.project_id}`}>{e.project_id}</a> · {e.date ?? "data nieznana"} · status: {String(e.status).replace("_", " ")}</div>
+                    <Evidence item={e} />
+                  </div>))}
+              </div>
+            </details>) : null}
+        </dd>
+        <dt>Statystyka</dt>
+        <dd>{fl.cases?.length ? `${fl.cases.length} z ${nSimilar} podobnych przypadków` : "z opisu inwestycji"}
+          {" · "}potwierdzonych przez eksperta: {fl.confirmed_cases ?? 0}
+          {fl.weight != null ? <span className="muted"> · waga sygnału {num(fl.weight, 2)}</span> : null}</dd>
+        {fl.action ? <><dt>Rekomendacja</dt><dd className="strong">{fl.action}</dd></> : null}
+      </dl>
+      {fl.clause ? <div className="clause"><b>Zapis do PPU / umowy:</b> {fl.clause}</div> : null}
+    </article>
+  );
+}
+
+type ChkItem = { id: string; name: string; ok: boolean; detail: string };
+function Checklist({ items }: { items: ChkItem[] }) {
+  const [open, setOpen] = useState<Record<number, boolean>>(() => Object.fromEntries(items.map((x, i) => [i, !x.ok])));
+  return (
+    <div className="panel flush">
+      {items.map((it, i) => (
+        <div className="chk" key={i}>
+          <button className="chk-btn" aria-expanded={!!open[i]} onClick={() => setOpen((o) => ({ ...o, [i]: !o[i] }))}>
+            <span className="chk-l"><span className="chk-id">{it.id}</span><span className="chk-name">{it.name}</span></span>
+            <span className="chk-r">{it.ok ? <span className="st-ok">Jest</span> : <span className="st-miss">Brak</span>}<Chevron open={!!open[i]} /></span>
+          </button>
+          {open[i] ? <div className="chk-detail">{it.detail}</div> : null}
+        </div>
+      ))}
     </div>
   );
 }
 
-function download(blob: Blob, name: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = name; a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
 export function AnalysisView() {
+  const toast = useToast();
   const [text, setText] = useState(EXAMPLES[0].text);
   const [result, setResult] = useState<Row | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [file, setFile] = useState<string | null>(null);
+  const [sub, setSub] = useState<Sub>("risks");
 
   const run = async (fn: () => Promise<Row>) => {
-    setBusy(true); setError(null);
-    try { const r = await fn(); setResult(r); setText(r.input_text); } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+    setBusy(true);
+    try { const r = await fn(); setResult(r); setText(r.input_text); setSub("risks"); }
+    catch (e) { toast((e as Error).message, true); } finally { setBusy(false); }
   };
   const exp = async (format: "csv" | "json") => {
-    try { download(await api.exportAnalysis(result?.input_text ?? text, format), `risk_miner_analiza.${format}`); }
-    catch (e) { setError((e as Error).message); }
+    try { download(await api.exportAnalysis(result?.input_text ?? text, format), `risk_miner_analiza.${format}`); toast(`Wyeksportowano analizę do pliku ${format.toUpperCase()}.`); }
+    catch (e) { toast((e as Error).message, true); }
   };
   const f = result?.features;
   const cmp = result?.comparison;
+  const similar: Row[] = result?.similar ?? [];
+  const checklist: ChkItem[] = result ? (result.water_checklist
+    ? result.water_checklist.map((c: Row) => ({ id: c.ref, name: c.item, ok: c.status === "jest w opisie",
+        detail: c.status === "jest w opisie" ? `Fragment opisu: ${c.source}` : "Pytanie kontrolne przed przetargiem: opis tego nie podaje – uzupełnij przed ogłoszeniem zamówienia. To pytanie, a nie stwierdzenie, że czegoś nie zrobiono." }))
+    : (result.missing_inputs as string[]).map((m, i) => ({ id: `B${i + 1}`, name: m, ok: false,
+        detail: "Opis nie podaje tej informacji. Uzupełnienie poprawi dobór podobnych przypadków i porównanie kosztów." }))) : [];
+  const missingCount = checklist.filter((c) => !c.ok).length;
+  const growthUp = cmp?.growth_pct?.values?.filter((v: number) => v > 0).length ?? 0;
+  const delayUp = cmp?.delay_days?.values?.filter((v: number) => v > 0).length ?? 0;
 
   return (
-    <>
-      <h2>Analiza nowego projektu</h2>
-      <div className="panel">
-        <p className="muted">Opisz inwestycję (podsektor, zakres i skalę, formułę realizacji, budżet, termin, znane ograniczenia) albo wgraj PDF z warstwą tekstową lub DOCX. System dobierze podobne przypadki z bazy i pokaże, na czym opiera każdy wniosek.</p>
-        <div className="row small"><span className="muted">Przykłady:</span>
-          {EXAMPLES.map((e) => <button key={e.label} className="btn" onClick={() => { setText(e.text); setResult(null); }}>{e.label}</button>)}</div>
-        <textarea id="analysis-text" rows={6} value={text} onChange={(e) => setText(e.target.value)} style={{ width: "100%", resize: "vertical" }} />
-        <div className="row">
-          <button className="btn primary" disabled={busy} onClick={() => run(() => api.analyze(text))}>Analizuj opis</button>
-          <label className="btn" style={{ cursor: busy ? "default" : "pointer" }}>Wgraj PDF / DOCX
-            <input type="file" accept=".pdf,.docx,.txt" hidden disabled={busy}
-              onChange={(e) => { const file = e.target.files?.[0]; if (file) run(() => api.analyzeFile(file)); e.target.value = ""; }} />
-          </label>
-          {busy ? <Spinner /> : null}
-          {result ? <span className="row" style={{ marginLeft: "auto" }}>
-            <button className="btn" onClick={() => exp("csv")}>Eksport CSV</button>
-            <button className="btn" onClick={() => exp("json")}>Eksport JSON</button></span> : null}
+    <section className="view">
+      <div className="page-head">
+        <div>
+          <h1>Ocena ryzyk nowej inwestycji</h1>
+          <p>Opisz planowane zadanie lub załącz koncepcję (PDF z warstwą tekstową, DOCX). System porówna je z historycznymi umowami wod-kan z BZP i pokaże, na czym opiera każdy wniosek.</p>
         </div>
-        <ErrorBox error={error} />
+      </div>
+      <div className="panel">
+        <div className="examples"><span>Wstaw przykład:</span>
+          {EXAMPLES.map((e) => <button key={e.label} className="link" onClick={() => { setText(e.text); setResult(null); setFile(null); }}>{e.label}</button>)}</div>
+        <div>
+          <label htmlFor="analysis-text" className="lbl">Opis zakresu, lokalizacji, szacowanego budżetu oraz terminu</label>
+          <textarea id="analysis-text" rows={5} className="field" value={text} onChange={(e) => setText(e.target.value)}
+            placeholder="Wpisz opis planowanej inwestycji wodociągowej lub kanalizacyjnej…" />
+        </div>
+        <div className="input-foot">
+          <label className="attach">
+            <span>{file ? `Załączono: ${file}` : "Załącz plik PDF / DOCX (np. PFU, koncepcja)"}</span>
+            <input type="file" accept=".pdf,.docx,.txt" disabled={busy}
+              onChange={(e) => { const fl = e.target.files?.[0]; if (fl) { setFile(fl.name); run(() => api.analyzeFile(fl)); } e.target.value = ""; }} />
+          </label>
+          <span className="row">
+            {busy ? <><Spinner /><span className="caption">Analizuję…</span></> : null}
+            <button className="btn btn-primary" disabled={busy || text.trim().length < 20} onClick={() => run(() => api.analyze(text))}>Analizuj inwestycję</button>
+          </span>
+        </div>
       </div>
 
       {result && f ? (
-        <>
-          <div className="panel">
-            <div className="row"><h3>Cechy nowej inwestycji</h3><OriginTag kind="dane" />
-              <span className="small muted">odczytane z Twojego opisu, z fragmentem, z którego pochodzą</span></div>
-            <div className="scroll"><table><tbody>
-              <Feature label="Podsektor główny" f={f.subsector_main} />
-              <tr><td className="muted small">Podsektory dodatkowe</td><td colSpan={2}>{f.subsector_extra.length ? f.subsector_extra.map((x: Row) => x.value).join(", ") : <span className="muted">—</span>}</td></tr>
-              <Feature label="Rodzaj prac" f={f.work_type} />
-              <Feature label="Formuła realizacji" f={f.formula} />
-              {Object.entries(f.scale as Record<string, Row>).map(([k, v]) => (
-                <Feature key={k} label={{ length_km: "Długość sieci [km]", rlm: "Wielkość [RLM]", flow_m3d: "Przepustowość [m³/d]",
-                  connections: "Przyłącza [szt.]", buildings: "Budynki / nieruchomości [szt.]" }[k] ?? k} f={v} />))}
-              {!Object.keys(f.scale).length ? <Feature label="Skala" f={null} /> : null}
-              <Feature label="Budżet" f={f.budget_pln ? { ...f.budget_pln, value: pln(f.budget_pln.value) } : null} />
-              <Feature label="Termin [miesiące]" f={f.duration_months} />
-              <tr><td className="muted small">Znane ograniczenia</td><td colSpan={2}>{f.constraints.length
-                ? f.constraints.map((c: Row) => <div key={c.value}><b>{c.value}</b> <span className="small muted">– {c.source}</span></div>)
-                : <span className="muted">nie wskazano</span>}</td></tr>
-            </tbody></table></div>
-            {result.missing_inputs.length ? <div className="gap">Opis nie podaje: <b>{result.missing_inputs.join(", ")}</b>. Uzupełnienie poprawi dobór przypadków i porównanie kosztów.</div> : null}
+        <div style={{ display: "grid", gap: 22 }}>
+          <div>
+            <div className="summary-head">
+              <span className="caption">Podsumowanie na podstawie podobnych przypadków z bazy · kwoty umów brutto z ogłoszeń BZP</span>
+              <span className="row">
+                <button className="btn btn-sm" onClick={() => exp("json")}>Eksportuj JSON</button>
+                <button className="btn btn-sm" onClick={() => exp("csv")}>Eksportuj CSV</button>
+              </span>
+            </div>
+            <div className="kpis">
+              <div className="kpi">
+                <div className="kpi-l">Próba porównawcza</div>
+                <div className="kpi-v">N = {similar.length} {similar.length === 1 ? "projekt" : "projektów"}</div>
+                <div className="kpi-n">Podsektor: {f.subsector_main?.value ?? "nie rozpoznano"} · z {result.n_candidates} w bazie</div>
+                {cmp?.confidence ? <div><ConfidenceChip level={cmp.confidence.level} /></div> : null}
+              </div>
+              <div className="kpi">
+                <div className="kpi-l">Odchylenie terminu</div>
+                <div className="kpi-v">{rangeText(cmp?.delay_days, "dni", 0)}</div>
+                <div className="kpi-n">{cmp?.delay_days?.median != null ? `Mediana ${signed(cmp.delay_days.median, 0)} dni względem umowy pierwotnej · ` : ""}
+                  opóźnienie w {delayUp} z {cmp?.delay_days?.n ?? 0}</div>
+              </div>
+              <div className="kpi">
+                <div className="kpi-l">Odchylenie kosztu brutto</div>
+                <div className="kpi-v">{rangeText(cmp?.growth_pct, "%")}</div>
+                <div className="kpi-n">{cmp?.growth_pct?.median != null ? `Mediana ${signed(cmp.growth_pct.median)}% · ` : ""}wzrost w {growthUp} z {cmp?.growth_pct?.n ?? 0} umów</div>
+              </div>
+              {cmp?.budget_after_growth ? (
+                <div className="kpi">
+                  <div className="kpi-l">Budżet po typowym wzroście</div>
+                  <div className="kpi-v">{mln(cmp.budget_after_growth.value)}</div>
+                  <div className="kpi-n">{cmp.budget_after_growth.basis}</div>
+                </div>) : null}
+            </div>
+            {cmp?.confidence ? <p className="caption" style={{ marginTop: 8 }}>Pewność prognozy: {cmp.confidence.basis}</p> : null}
+            {cmp?.notes?.map((n: string, i: number) => <div key={i} className="gap" style={{ marginTop: 8 }}>{n}</div>)}
           </div>
 
-          <div className="panel">
-            <div className="row between"><div className="row"><h3>Podobne przypadki ({result.similar.length} z {result.n_candidates})</h3>
-              <OriginTag kind="wniosek" /><span className="small muted">dobór; kwoty i terminy przypadków to dane źródłowe z BZP</span></div>
-              <span className="small muted">Każda cecha waży tyle samo; „częściowo” liczy się jako pół. Cechy bez danych nie są liczone. Najpierw przypadki z tym samym podsektorem głównym.</span></div>
-            {result.similar.map((s: Row) => (
-              <details key={s.project_id} className="event">
-                <summary>
-                  <span className="date" style={{ minWidth: 150 }} title={`${s.score}% porównywalnych cech`}>
-                    pasuje <b>{s.matched} z {s.checked}</b>{s.partial ? ` (+${s.partial} częściowo)` : ""}</span>
-                  <span style={{ flex: 1, minWidth: 0 }}><a href={`#baza/${s.project_id}`} onClick={(e) => e.stopPropagation()}>{s.project_id}</a> · {s.name}</span>
-                  <span className="small muted">wzrost {s.growth_pct != null ? `${num(s.growth_pct)}%` : "—"} · opóźn. {s.delay_days != null ? `${s.delay_days} dni` : "—"}</span>
-                  <LinkChip status={s.link_status} />
-                </summary>
-                <div className="body">
-                  <div className="scroll"><table>
-                    <thead><tr><th></th><th>Cecha</th><th>Ocena</th><th>Szczegóły</th></tr></thead>
-                    <tbody>{s.features.map((x: Row) => (
-                      <tr key={x.name}><td>{STATUS_ICON[x.status] ?? ""}</td><td>{x.name}</td><td>{x.status}</td><td className="small">{x.detail}</td></tr>))}</tbody>
-                  </table></div>
-                  <div className="kpis">
-                    <div className="kpi"><span className="l">Wartość umów</span><span className="v">{mln(s.contract_value)}</span></div>
-                    <div className="kpi"><span className="l">Wypłacono</span><span className="v">{mln(s.paid_total)}</span></div>
-                    <div className="kpi"><span className="l">Termin z umowy</span><span className="v">{s.planned_months != null ? `${num(s.planned_months)} mies.` : "—"}</span></div>
-                    <div className="kpi"><span className="l">Liczba ofert</span><span className="v">{s.n_offers ?? "—"}</span></div>
+          <div>
+            <div className="subtabs" role="tablist">
+              {([["risks", `Kluczowe ryzyka i rekomendacje (${result.flags.length})`],
+                 ["checklist", `Braki w opisie (${missingCount} z ${checklist.length})`],
+                 ["similar", `Podobne inwestycje (N = ${similar.length})`],
+                 ["features", "Cechy inwestycji"]] as [Sub, string][]).map(([id, label]) => (
+                <button key={id} role="tab" aria-selected={sub === id} className={`pill ${sub === id ? "active" : ""}`} onClick={() => setSub(id)}>{label}</button>))}
+            </div>
+            <div style={{ marginTop: 18 }}>
+              {sub === "risks" && (result.flags.length
+                ? <div style={{ display: "grid", gap: 14 }}>{result.flags.map((fl: Row) => <RiskCard key={fl.code} fl={fl} nSimilar={similar.length} />)}</div>
+                : <div className="panel empty-state"><div className="panel-title">Brak flag ryzyka</div>
+                    <p className="panel-sub">Podobne przypadki nie mają zdarzeń ryzyka, a opis nie wskazuje znanych ograniczeń.</p></div>)}
+
+              {sub === "checklist" && (
+                <div style={{ display: "grid", gap: 10 }}>
+                  <p className="caption">{result.water_checklist
+                    ? "Checklista przygotowania sieci wodociągowej wg poradnika eksperckiego organizatora."
+                    : "Informacje, których brakuje w opisie, a które poprawiają dobór przypadków."} „Brak” to pytanie do uzupełnienia przed ogłoszeniem zamówienia.</p>
+                  {checklist.length ? <Checklist key={result.input_text} items={checklist} />
+                    : <div className="panel empty-state"><div className="panel-title">Opis zawiera wszystkie kluczowe dane</div></div>}
+                  {result.water_checklist && result.missing_inputs.length
+                    ? <div className="gap">Opis nie podaje także: <b>{result.missing_inputs.join(", ")}</b>.</div> : null}
+                </div>)}
+
+              {sub === "similar" && (
+                <div className="panel flush">
+                  <div className="tbl-toolbar">
+                    <span>Podobne postępowania: <strong>{similar.length}</strong> z {result.n_candidates}</span>
+                    <span>Sortowanie: <strong>liczba pasujących cech (malejąco)</strong></span>
                   </div>
-                  <div className="small muted">Opis przypadku pochodzi z: {s.description_source}. Ryzyka w przypadku: {s.risks.join(", ") || "brak"}.</div>
-                </div>
-              </details>
-            ))}
-          </div>
+                  <div className="scroll-x">
+                    <table className="tbl">
+                      <thead><tr><th>Inwestycja</th><th>Podobieństwo</th><th className="num">Wartość umów</th><th className="num">Zmiana kosztu / terminu</th></tr></thead>
+                      <tbody className="click">{similar.map((s) => (
+                        <tr key={s.project_id} onClick={() => { location.hash = `baza/${s.project_id}`; }}>
+                          <td><div className="t-main">{s.name}</div>
+                            <div className="t-sub"><span className="mono">{s.project_id}</span> · {s.recipient} · pasuje: {(s.matches ?? []).map((m: Row) => m.name).join(", ") || "—"}</div></td>
+                          <td><span className="sim" title={`${s.score}% porównywalnych cech`}>{s.matched} z {s.checked}{s.partial ? ` (+${s.partial} częściowo)` : ""}</span></td>
+                          <td className="num">{mln(s.contract_value)}</td>
+                          <td className="num">{s.growth_pct != null ? `${signed(s.growth_pct)}%` : "—"} / {s.delay_days != null ? `${signed(s.delay_days, 0)} dni` : "—"}
+                            {s.risks?.length ? <div className="t-sub">ryzyka: {s.risks.join(", ")}</div> : null}</td>
+                        </tr>))}</tbody>
+                    </table>
+                  </div>
+                  <div className="tbl-footer"><span>Każda cecha waży tyle samo; „częściowo” liczy się jako pół. Cechy bez danych nie są liczone.</span><span>Kliknij wiersz, aby otworzyć kartę projektu</span></div>
+                </div>)}
 
-          {cmp ? (
-            <div className="panel">
-              <div className="row between"><div className="row"><h3>Koszty i terminy w podobnych przypadkach</h3><OriginTag kind="obliczenie" /></div>
-                {cmp.confidence ? <span className="row"><span className="small muted">pewność prognozy:</span><ConfidenceChip level={cmp.confidence.level} /></span> : null}</div>
-              {cmp.confidence ? <p className="small muted">{cmp.confidence.basis}</p> : null}
-              <div className="kpis">
-                <Stat label="Wzrost wypłaty vs wartość umowy" st={cmp.growth_pct} unit="%" />
-                <Stat label="Opóźnienie vs termin pierwotny" st={cmp.delay_days} unit="dni" fmt={(v) => num(v, 0)} />
-                <Stat label="Okres realizacji z umowy" st={cmp.planned_months} unit="mies." />
-                {cmp.budget_after_growth ? <div className="kpi"><span className="l">Budżet po typowym wzroście</span>
-                  <span className="v">{mln(cmp.budget_after_growth.value)}</span><span className="small muted">{cmp.budget_after_growth.basis}</span></div> : null}
-              </div>
-              {cmp.notes.map((n: string, i: number) => <div key={i} className="gap">{n}</div>)}
-              <p className="small muted">Wartości dotyczą umów na roboty (kwoty brutto), nie całych projektów. Ujemny wzrost oznacza wypłatę niższą niż wartość umowy.</p>
+              {sub === "features" && (
+                <div className="panel">
+                  <div className="row"><span className="panel-title">Cechy odczytane z opisu</span><OriginTag kind="dane" /></div>
+                  <div className="scroll-x"><table><tbody>
+                    <FeatureRow label="Podsektor główny" f={f.subsector_main} />
+                    <tr><td className="t-sub">Podsektory dodatkowe</td><td colSpan={2}>{f.subsector_extra.length ? f.subsector_extra.map((x: Row) => x.value).join(", ") : <span className="muted">—</span>}</td></tr>
+                    <FeatureRow label="Rodzaj prac" f={f.work_type} />
+                    <FeatureRow label="Formuła realizacji" f={f.formula} />
+                    {Object.entries(f.scale as Record<string, Row>).map(([k, v]) => <FeatureRow key={k} label={SCALE_LABEL[k] ?? k} f={v} />)}
+                    {!Object.keys(f.scale).length ? <FeatureRow label="Skala" f={null} /> : null}
+                    <FeatureRow label="Budżet" f={f.budget_pln ? { ...f.budget_pln, value: pln(f.budget_pln.value) } : null} />
+                    <FeatureRow label="Termin [miesiące]" f={f.duration_months} />
+                    <tr><td className="t-sub">Znane ograniczenia</td><td colSpan={2}>{f.constraints.length
+                      ? f.constraints.map((c: Row) => <div key={c.value}><b>{c.value}</b> <span className="small muted">– {c.source}</span></div>)
+                      : <span className="muted">nie wskazano</span>}</td></tr>
+                  </tbody></table></div>
+                </div>)}
             </div>
-          ) : null}
-
-          <div className="panel">
-            <div className="row"><h3>Flagi ryzyka i rekomendacje</h3><OriginTag kind="wniosek" />
-              <span className="small muted">każda flaga wskazuje przypadki i dowody, na których się opiera</span></div>
-            {result.flags.length ? result.flags.map((fl: Row) => (
-              <div key={fl.code} className="event" style={{ padding: 12, display: "grid", gap: 6 }}>
-                <div className="row"><b>{fl.code} {fl.name}</b><span className={`chip ${STRENGTH[fl.strength]}`}>sygnał {fl.strength}</span></div>
-                <div className="small muted">Podstawa: {fl.basis}</div>
-                {fl.action ? <div>➜ <b>Działanie:</b> {fl.action}</div> : null}
-                {fl.clause ? <div>➜ <b>Zapis do sprawdzenia:</b> {fl.clause}</div> : null}
-                {fl.evidence.length ? (
-                  <details><summary className="small" style={{ color: "var(--accent)" }}>Dowody z podobnych przypadków ({fl.evidence.length})</summary>
-                    <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
-                      {fl.evidence.map((e: Row) => (
-                        <div key={e.event_id}>
-                          <div className="small"><a href={`#baza/${e.project_id}`}>{e.project_id}</a> · {e.date ?? "data nieznana"} · status: {e.status}</div>
-                          <Evidence item={e} />
-                        </div>))}
-                    </div></details>) : null}
-              </div>
-            )) : <div className="empty">Brak flag – podobne przypadki nie mają zdarzeń ryzyka, a opis nie wskazuje znanych ograniczeń.</div>}
           </div>
-
-          {result.water_checklist ? (
-            <div className="panel">
-              <div className="row"><h3>Checklista przygotowania sieci wodociągowej</h3><OriginTag kind="dane" /></div>
-              <p className="small muted">Według poradnika eksperckiego organizatora. „Brak w opisie” to pytanie do uzupełnienia przed ogłoszeniem zamówienia, a nie stwierdzenie, że czegoś nie zrobiono.</p>
-              <div className="scroll"><table><tbody>{result.water_checklist.map((c: Row) => (
-                <tr key={c.item}><td>{c.status === "jest w opisie" ? "✅" : "❔"}</td><td>{c.item} <span className="small muted">({c.ref})</span></td>
-                  <td className="small muted">{c.source ?? <span className="chip warn">brak w opisie</span>}</td></tr>))}</tbody></table></div>
-            </div>
-          ) : null}
-        </>
+        </div>
       ) : null}
-    </>
+    </section>
   );
 }

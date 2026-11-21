@@ -48,3 +48,18 @@ def propose(text: str):
             seen.add(code)
             out.append((code, m.group(0)))
     return out
+
+
+BASE_CATALOG = list(CATALOG)  # R01–R15 z materiału eksperckiego – wartości startowe tabeli risk_category
+
+
+def load(con):
+    """Wczytaj zatwierdzone kategorie z bazy (tabela risk_category). Zmienia NAMES i CATALOG w miejscu,
+    więc moduły, które je zaimportowały, od razu widzą kategorie dodane przez eksperta."""
+    rows = con.execute("SELECT code, name, effects FROM risk_category WHERE status='zatwierdzona' "
+                       "ORDER BY code").fetchall()
+    if not rows:
+        return
+    CATALOG[:] = [(r[0], r[1], r[2] or "") for r in rows]
+    NAMES.clear()
+    NAMES.update({c: n for c, n, _ in CATALOG})

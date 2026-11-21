@@ -45,6 +45,11 @@ def get_con():
         con.close()
 
 
+def con_dep():
+    """Połączenie dla prostych odczytów poza Depends (np. katalog ryzyk)."""
+    return db.connect()
+
+
 def rows(con, sql, args=()):
     return [dict(r) for r in con.execute(sql, args).fetchall()]
 
@@ -78,7 +83,106 @@ def export_base(format: str = "json", con=Depends(get_con)):
 
 @app.get("/api/risks")
 def risk_catalog():
-    return [{"code": c, "name": n, "effects": e} for c, n, e in risks.CATALOG]
+    con = con_dep()
+    try:
+        return rows(con, "SELECT code, name, effects, status, proposed_by, comment, created_at, decided_at "
+                         "FROM risk_category ORDER BY status<>'proponowana', code")
+    finally:
+        con.close()
+
+
+# --------------------------------------------------------------------------- katalog ryzyk i reguły (panel eksperta)
+class CategoryProposal(BaseModel):
+    name: str
+    effects: str = None
+
+
+class CategoryDecision(BaseModel):
+    action: str            # approve | reject
+    comment: str = None
+
+
+@app.post("/api/risks")
+def propose_risk(c: CategoryProposal, con=Depends(get_con)):
+    try:
+        return {"code": expert.propose_category(con, c.name, c.effects), "status": "proponowana"}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/risks/{code}/decision")
+def decide_risk(code: str, d: CategoryDecision, con=Depends(get_con)):
+    try:
+        return {"status": expert.decide_category(con, code, d.action, d.comment)}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+class Rules(BaseModel):
+    text: str
+
+
+@app.get("/api/settings/llm-rules")
+def get_rules(con=Depends(get_con)):
+    row = con.execute("SELECT value, updated_at FROM setting WHERE key='llm_rules'").fetchone()
+    return {"text": row["value"] if row else "", "updated_at": row["updated_at"] if row else None}
+
+
+@app.put("/api/settings/llm-rules")
+def put_rules(r: Rules, con=Depends(get_con)):
+    db.set_setting(con, "llm_rules", r.text)
+    return {"text": r.text, "updated_at": db.now()}
+
+
+# --------------------------------------------------------------------------- kolejka weryfikacji
+def _context(con, notice_number, section):
+    """Pola ogłoszenia przed i po cytowanym punkcie – kontekst dowodu w panelu eksperta."""
+    import re as _re
+    if not notice_number or not section:
+        return None, None
+    n = con.execute("SELECT fields_json FROM notice WHERE notice_number=?", (notice_number,)).fetchone()
+    m = _re.search(r"pkt ([\d.]+)", section or "")
+    if not n or not m:
+        return None, None
+    fields = json.loads(n["fields_json"] or "[]")
+    idx = next((i for i, f in enumerate(fields) if f["code"] == m.group(1)), None)
+    if idx is None:
+        return None, None
+    fmt = lambda f: (f"{f['code']}.) {f['label']}: " if f["code"] else "") + (f["value"] or "")[:260]
+    return (fmt(fields[idx - 1]) if idx > 0 else None,
+            fmt(fields[idx + 1]) if idx + 1 < len(fields) else None)
+
+
+@app.get("/api/verify-queue")
+def verify_queue(con=Depends(get_con)):
+    """Kolejka eksperta: propozycje powiązań KPO i propozycje ryzyk (reguły, LLM, sygnały) z dowodem."""
+    items = []
+    for l in rows(con, "SELECT l.*, p.name, p.recipient_name FROM project_link l JOIN project p USING(project_id) "
+                       "WHERE l.status='proponowane' ORDER BY l.project_id"):
+        cands = _candidates(con, l["project_id"])
+        cur = next((c for c in cands if c["ocid"] == l["ocid"]), None)
+        items.append({"type": "powiazanie", "id": f"link:{l['project_id']}", "project_id": l["project_id"],
+                      "project": l["name"], "recipient": l["recipient_name"], "ocid": l["ocid"],
+                      "confidence": cur["confidence"] if cur else None,
+                      "matched": cur["matched"] if cur else None, "checked": cur["checked"] if cur else None,
+                      "evidence": l["evidence"], "candidates": cands})
+    for e in rows(con, "SELECT e.*, p.name AS project, p.recipient_name AS recipient FROM visible_event e "
+                       "JOIN project p USING(project_id) WHERE e.kind='propozycja' AND e.status='do_weryfikacji' "
+                       "ORDER BY e.project_id, COALESCE(e.event_date,''), e.id"):
+        before, after = _context(con, e["source_notice"], e["source_section"])
+        n = con.execute("SELECT notice_type FROM notice WHERE notice_number=?", (e["source_notice"],)).fetchone()
+        impact = rows(con, "SELECT label, value_num, unit FROM visible_fact WHERE project_id=? AND part_no=? AND key IN "
+                           "('wzrost_wyplaty_pct','opoznienie_vs_pierwotny_dni','wzrost_wyplaty_pln') ORDER BY key",
+                      (e["project_id"], e["part_no"]))
+        items.append({"type": "ryzyko", "id": f"event:{e['id']}", "event_id": e["id"], "project_id": e["project_id"],
+                      "project": e["project"], "recipient": e["recipient"], "code": e["title"].split()[0],
+                      "title": e["title"], "origin": "model językowy" if e["event_type"] == "ryzyko LLM" else "reguła",
+                      "details": e["details"], "date": e["event_date"], "source_notice": e["source_notice"],
+                      "source_url": e["source_url"], "source_section": e["source_section"],
+                      "notice_label": pipeline.NOTICE_LABELS.get(n["notice_type"], n["notice_type"]) if n else
+                                      ("Dokument z BIP" if (e["source_notice"] or "").startswith("BIP") else None),
+                      "quote": e["quote"], "before": before, "after": after, "impact": impact})
+    return items
 
 
 # --------------------------------------------------------------------------- import
@@ -102,16 +206,26 @@ def import_sample(con=Depends(get_con)):
 # --------------------------------------------------------------------------- projekty
 @app.get("/api/projects")
 def projects(con=Depends(get_con)):
-    return rows(con, """
+    out = rows(con, """
         SELECT p.project_id, p.name, p.recipient_name, p.city, p.public_id_type, p.public_id, p.scope,
                p.last_fetch_status, p.last_fetch_message, p.last_fetch_at,
                l.status AS link_status, l.method AS link_method,
                (SELECT count(*) FROM gap g WHERE g.project_id=p.project_id) AS n_gaps,
                (SELECT count(*) FROM visible_event e WHERE e.project_id=p.project_id AND e.kind='propozycja'
-                  AND e.status='do_weryfikacji') AS n_open
+                  AND e.status='do_weryfikacji') AS n_open,
+               (SELECT sum(c.value) FROM contract c WHERE c.ocid=l.ocid AND (l.part_no=0 OR c.part_no=l.part_no)) AS contract_value,
+               (SELECT estimated_value FROM procedure pr WHERE pr.ocid=l.ocid) AS estimated_value,
+               p.annotation
         FROM project p
         LEFT JOIN project_link l ON l.project_id=p.project_id AND l.status<>'odrzucone'
         ORDER BY p.project_id""")
+    for p in out:
+        f = analysis.extract_features(f"{p['name']} {p.pop('annotation') or ''}")
+        p["subsector"] = (f.get("subsector_main") or {}).get("value") or "Inne obiekty wod-kan"
+        # „Zatwierdzony”: powiązanie potwierdzone i brak otwartych propozycji; inaczej „Do weryfikacji”
+        p["review_status"] = ("Zatwierdzony" if p["link_status"] == "potwierdzone" and not p["n_open"]
+                              else "Do weryfikacji")
+    return out
 
 
 def _candidates(con, pid):
@@ -256,12 +370,13 @@ class EventDecision(BaseModel):
     action: str            # accept | reject
     code: str = None       # kategoria R01–R15 przy akceptacji (inna = poprawka)
     comment: str = None
+    exemplar: bool = False # przykład wzorcowy dla kolejnych analiz
 
 
 @app.post("/api/events/{event_id}/decision")
 def event_decision(event_id: int, d: EventDecision, con=Depends(get_con)):
     try:
-        return {"status": expert.decide_event(con, event_id, d.action, d.code, d.comment)}
+        return {"status": expert.decide_event(con, event_id, d.action, d.code, d.comment, exemplar=d.exemplar)}
     except ValueError as e:
         raise HTTPException(400, str(e))
 

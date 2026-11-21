@@ -1,5 +1,5 @@
 // Wspólne drobne komponenty i formatowanie
-import type { ReactNode } from "react";
+import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 import type { Row } from "./api";
 
 export const pln = (v: number | null | undefined) =>
@@ -89,3 +89,36 @@ export function OriginTag({ kind }: { kind: "dane" | "obliczenie" | "wniosek" })
 export function ConfidenceChip({ level }: { level?: string | null }) {
   return level ? <span className={`chip ${CONF[level] ?? "neutral"}`}>pewność {level}</span> : null;
 }
+
+/* ---------- powiadomienia (toast) ---------- */
+type Toast = { id: number; text: string; error?: boolean };
+const ToastCtx = createContext<(text: string, error?: boolean) => void>(() => undefined);
+export const useToast = () => useContext(ToastCtx);
+export function ToastProvider({ children }: { children: ReactNode }) {
+  const [items, setItems] = useState<Toast[]>([]);
+  const show = useCallback((text: string, error = false) => {
+    const id = Date.now() + Math.random();
+    setItems((t) => [...t, { id, text, error }]);
+    window.setTimeout(() => setItems((t) => t.filter((x) => x.id !== id)), error ? 6000 : 3200);
+  }, []);
+  return (
+    <ToastCtx.Provider value={show}>
+      {children}
+      <div className="toasts" role="status" aria-live="polite">
+        {items.map((t) => <div key={t.id} className={`toast ${t.error ? "err" : ""}`}>{t.text}</div>)}
+      </div>
+    </ToastCtx.Provider>
+  );
+}
+
+export function download(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export const Chevron = ({ open }: { open: boolean }) => (
+  <svg className={`chev ${open ? "open" : ""}`} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+    <path d="M5 8l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+);

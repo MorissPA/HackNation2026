@@ -1,105 +1,175 @@
-import { useEffect, useState } from "react";
-import { api, type ImportReport, type Job, type Row, type Stats } from "./api";
-import { ErrorBox, LinkChip, Spinner } from "./ui";
-import { ProjectCard } from "./ProjectCard";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { api, type Card, type Row } from "./api";
+import { LinkChip, Spinner, download, mln, num, pln, useToast } from "./ui";
 
-export function BaseView({ stats, selected, onSelect, job, startFetch, refreshKey, onChanged }: {
-  stats: Stats | null; selected: string | null; onSelect: (id: string) => void;
-  job: Job | null; startFetch: (ids: string[] | "all") => void; refreshKey: number; onChanged: () => void;
-}) {
-  const [projects, setProjects] = useState<Row[]>([]);
-  const [report, setReport] = useState<ImportReport | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState("");
-
-  useEffect(() => { api.projects().then(setProjects).catch((e) => setError(e.message)); }, [refreshKey]);
-  useEffect(() => { if (!selected && projects.length) onSelect(projects.find((p) => p.project_id === "RM-2026-003")?.project_id ?? projects[0].project_id); },
-    [projects, selected, onSelect]);
-
-  const runImport = async (fn: () => Promise<ImportReport>) => {
-    setBusy(true); setError(null);
-    try { setReport(await fn()); onChanged(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
-  };
-  const running = job?.status === "trwa";
-  const q = filter.toLowerCase();
-  const shown = projects.filter((p) => !q || `${p.project_id} ${p.name} ${p.recipient_name} ${p.public_id}`.toLowerCase().includes(q));
-
+function Drawer({ pid, project, onClose }: { pid: string | null; project: Row | undefined; onClose: () => void }) {
+  const [card, setCard] = useState<Card | null>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!pid) return;
+    let alive = true;
+    setCard(null);
+    api.card(pid).then((c) => alive && setCard(c)).catch(() => undefined);
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => { alive = false; window.removeEventListener("keydown", onKey); };
+  }, [pid, onClose]);
+  const open = !!pid;
+  const link = card?.links.find((l) => l.status !== "odrzucone");
+  const base = card?.notices.find((n) => n.notice_type === "ContractNotice") ?? card?.notices[0];
+  const fact = (key: string, part = 0) => card?.facts.find((f) => f.key === key && f.part_no === part);
+  const contractSum = card?.contracts.reduce((s, c) => s + (c.value ?? 0), 0) ?? 0;
+  const paidSum = card?.contracts.reduce((s, c) => s + (c.paid_total ?? 0), 0) ?? 0;
+  const risks = card?.events.filter((e) => e.kind === "propozycja" && e.status !== "odrzucone") ?? [];
   return (
     <>
-      <div className="row between">
-        <h2>Baza inwestycji</h2>
+      {open ? <div className="backdrop" onClick={onClose} /> : null}
+      <aside className={`drawer ${open ? "open" : ""}`} role="dialog" aria-modal="true" aria-labelledby="drawer-title" aria-hidden={!open}>
+        <div className="drawer-head">
+          <div>
+            <span className="eyebrow">{pid} · {project?.recipient_name}</span>
+            <h2 id="drawer-title">{project?.name ?? card?.project.name}</h2>
+          </div>
+          <button ref={closeRef} className="x" aria-label="Zamknij" onClick={onClose}>✕</button>
+        </div>
+        <div className="drawer-body">
+          {!card ? <Spinner /> : (
+            <>
+              <div>
+                <div className="tree-h">Hierarchia powiązań w bazie</div>
+                <div className="tree">
+                  <div><div className="k">1. Projekt i podsektor</div>
+                    <div className="v strong">{card.project.recipient_name} — {project?.subsector}</div>
+                    <div className="v small muted">{card.project.public_id_type}: <span className="mono">{card.project.public_id}</span></div></div>
+                  <div><div className="k">2. Postępowanie w BZP</div>
+                    {link ? <>
+                      <div className="v strong">{base?.source_url ? <a href={base.source_url} target="_blank" rel="noreferrer">{base.notice_number}</a> : base?.notice_number ?? link.ocid}</div>
+                      <div className="v small"><LinkChip status={link.status} /> <span className="muted">metoda: {link.method}</span></div>
+                    </> : <div className="v"><LinkChip status={null} /></div>}</div>
+                  <div><div className="k">3. Części zamówienia i umowy</div>
+                    {card.contracts.length ? card.contracts.map((c) => (
+                      <div key={c.id} className="v"><b>{c.part_no ? `Część ${c.part_no}` : "Całe zamówienie"}</b>: {c.contractor_name ?? "wykonawca nieznany"}
+                        <span className="muted"> · {mln(c.value)} · zawarta {c.signed_date ?? "—"}</span></div>))
+                      : <div className="v muted">Brak informacji o udzieleniu zamówienia.</div>}</div>
+                  <div><div className="k">4. Zmiany umowy (art. 455 Pzp)</div>
+                    <div className="v">{card.changes.length ? `${card.changes.length} zmian w ogłoszeniach BZP` : "Brak ogłoszeń o zmianie umowy"}
+                      {card.changes.slice(0, 3).map((ch) => <div key={ch.id} className="small muted">{ch.change_date ?? "data nieznana"} · {ch.legal_basis ?? "podstawa nieznana"}</div>)}
+                      {card.changes.length > 3 ? <div className="small muted">… i {card.changes.length - 3} kolejne w pełnej karcie</div> : null}</div></div>
+                  <div><div className="k">5. Wykonanie</div>
+                    {card.contracts.map((c) => (
+                      <div key={c.id} className="v">{c.part_no ? `Część ${c.part_no}: ` : ""}{c.actual_end ? `zakończono ${c.actual_end}` : "brak ogłoszenia o wykonaniu"}
+                        {fact("opoznienie_vs_pierwotny_dni", c.part_no) ? <span className="muted"> · {num(fact("opoznienie_vs_pierwotny_dni", c.part_no)!.value_num, 0)} dni vs termin pierwotny</span> : null}</div>))}</div>
+                  <div><div className="k">6. Ryzyka w przypadku</div>
+                    <div className="v">{risks.length ? risks.map((e) => (e.expert_title ?? e.title).split(" ")[0]).filter((v, i, a) => a.indexOf(v) === i).join(", ") : "brak"}
+                      <span className="muted small"> · do oceny: {project?.n_open ?? 0}</span></div></div>
+                </div>
+              </div>
+              <div className="sum">
+                <div className="r"><span>Szacunkowa wartość zamówienia (netto)</span><span>{pln(project?.estimated_value)}</span></div>
+                <div className="r"><span>Wartość umów (brutto)</span><span>{pln(contractSum || null)}</span></div>
+                <div className="r"><span>Wypłacono łącznie (brutto)</span><span>{pln(paidSum || null)}</span></div>
+                {fact("wzrost_wyplaty_pct") ? <div className="r"><span>Wzrost wypłaty względem umowy</span><span>{num(fact("wzrost_wyplaty_pct")!.value_num)}%</span></div> : null}
+                <p>Uwaga metodyczna: szacunek zamówienia (netto) i wartość umowy (brutto) raportujemy osobno, bo różni je podatek VAT – nie porównujemy ich wprost.</p>
+              </div>
+              {card.gaps.length ? <div className="gap"><b>Braki danych ({card.gaps.length}):</b> {card.gaps.slice(0, 3).map((g) => g.message).join(" · ")}{card.gaps.length > 3 ? " …" : ""}</div> : null}
+              <a className="btn btn-primary" href={`#karta/${pid}`}>Otwórz pełną kartę przypadku</a>
+            </>
+          )}
+        </div>
+      </aside>
+    </>
+  );
+}
+
+const csvCell = (v: unknown) => { const s = v == null ? "" : String(v); return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+
+export function BaseView({ selected, onSelect, refreshKey }: { selected: string | null; onSelect: (id: string | null) => void; refreshKey: number }) {
+  const toast = useToast();
+  const [projects, setProjects] = useState<Row[] | null>(null);
+  const [q, setQ] = useState("");
+  const [sub, setSub] = useState("ALL");
+  const [st, setSt] = useState("ALL");
+  useEffect(() => { api.projects().then(setProjects).catch((e) => toast(e.message, true)); }, [refreshKey, toast]);
+  const subsectors = useMemo(() => [...new Set((projects ?? []).map((p) => p.subsector))].sort(), [projects]);
+  const shown = useMemo(() => (projects ?? []).filter((p) => {
+    const t = q.toLowerCase();
+    return (!t || `${p.project_id} ${p.name} ${p.recipient_name} ${p.public_id}`.toLowerCase().includes(t))
+      && (sub === "ALL" || p.subsector === sub) && (st === "ALL" || p.review_status === st);
+  }), [projects, q, sub, st]);
+  const close = useMemo(() => () => onSelect(null), [onSelect]);
+
+  const exportView = () => {
+    const head = ["ID", "Zamawiający", "Nazwa", "Podsektor", "Identyfikator", "Powiązanie BZP", "Wartość umów brutto", "Szacunek netto", "Status"];
+    const rows = shown.map((p) => [p.project_id, p.recipient_name, p.name, p.subsector, p.public_id, p.link_status ?? "brak",
+      p.contract_value ?? "", p.estimated_value ?? "", p.review_status]);
+    download(new Blob(["﻿" + [head, ...rows].map((r) => r.map(csvCell).join(";")).join("\n")], { type: "text/csv;charset=utf-8" }), "risk_miner_projekty.csv");
+    toast(`Wyeksportowano ${shown.length} projektów do CSV.`);
+  };
+
+  return (
+    <section className="view">
+      <div className="page-head">
+        <div>
+          <h1>Baza doświadczeń projektowych</h1>
+          <p>Projekty z arkusza powiązane z ogłoszeniami BZP. Kliknij wiersz, aby zobaczyć ścieżkę realizacji: postępowanie, części, umowy, zmiany i wykonanie.</p>
+        </div>
         <div className="row">
-          <button className="btn" disabled={busy || !stats?.sample_available} onClick={() => runImport(api.importSample)}
-            title="Risk_Miner_dane_projekty.xlsx z paczki organizatora">Importuj paczkę organizatora</button>
-          <label className="btn" style={{ cursor: busy ? "default" : "pointer" }}>
-            Wgraj XLSX / CSV
-            <input type="file" accept=".xlsx,.csv" hidden disabled={busy}
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) runImport(() => api.importFile(f)); e.target.value = ""; }} />
-          </label>
-          <button className="btn primary" disabled={running || !projects.length} onClick={() => startFetch("all")}>
-            Pobierz z BZP wszystkie rekordy</button>
+          <button className="btn btn-sm" disabled={!shown.length} onClick={exportView}>Eksportuj widok (CSV)</button>
+          <a className="btn btn-sm" href="/api/export?format=json" download title="Projekt po projekcie z relacjami, dowodami i decyzjami eksperta">Cała baza JSON</a>
+          <a className="btn btn-sm" href="/api/export?format=csv" download title="Archiwum ZIP z tabelami CSV">Cała baza CSV (ZIP)</a>
         </div>
       </div>
-      {projects.length ? (
-        <div className="row small" style={{ justifyContent: "flex-end", marginTop: -8 }}>
-          <span className="muted">Eksport całej bazy przypadków:</span>
-          <a className="btn" href="/api/export?format=json" download title="Projekt po projekcie z relacjami, dowodami i decyzjami eksperta">JSON</a>
-          <a className="btn" href="/api/export?format=csv" download title="Archiwum ZIP z tabelami CSV (Excel)">CSV (ZIP)</a>
-        </div>
-      ) : null}
-      <ErrorBox error={error} />
-
-      {report ? (
-        <div className="panel">
-          <div className="row between"><h3>Raport importu</h3><button className="btn" onClick={() => setReport(null)}>Zamknij</button></div>
-          <div className="row">{Object.entries(report.counts).map(([k, v]) => <span key={k} className={`chip ${k === "błąd" && v ? "bad" : "neutral"}`}>{k}: {v}</span>)}</div>
-          {report.rows.some((r) => r.status !== "bez_zmian" || r.message) ? (
-            <div className="scroll"><table><thead><tr><th>Wiersz</th><th>Rekord</th><th>Status</th><th>Uwagi</th></tr></thead>
-              <tbody>{report.rows.filter((r) => r.status !== "bez_zmian" || r.message).map((r, i) => (
-                <tr key={i}><td>{r.row_no ?? "—"}</td><td className="mono">{r.project_id}</td><td>{r.status}</td><td className="small">{r.message}</td></tr>))}</tbody></table></div>
-          ) : <p className="muted">Wszystkie rekordy bez zmian – ponowny import nie utworzył duplikatów.</p>}
-        </div>
-      ) : null}
-
-      {job ? (
-        <div className="panel">
-          <div className="row between">
-            <h3>{running ? <><Spinner /> Pobieranie z BZP</> : "Pobieranie z BZP – " + job.status}</h3>
-            <span className="small muted">{job.done}/{job.total}{job.current && running ? ` · ${job.current}` : ""}
-              {job.sources?.length ? ` · źródła: ${job.sources.join(", ")}` : ""}</span>
+      <div className="board">
+        <aside className="panel flush">
+          <div className="filter-head"><div className="panel-title">Kryteria wyszukiwania</div></div>
+          <div className="filter-body">
+            <div><label className="lbl" htmlFor="f-q">Szukaj</label>
+              <input id="f-q" type="text" className="field" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Gmina, nazwa zadania lub numer BZP…" /></div>
+            <div><label className="lbl" htmlFor="f-sub">Podsektor</label>
+              <select id="f-sub" className="field" value={sub} onChange={(e) => setSub(e.target.value)}>
+                <option value="ALL">Wszystkie podsektory</option>
+                {subsectors.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select></div>
+            <div><label className="lbl" htmlFor="f-st">Status</label>
+              <select id="f-st" className="field" value={st} onChange={(e) => setSt(e.target.value)}>
+                <option value="ALL">Wszystkie statusy</option>
+                <option value="Zatwierdzony">Zatwierdzony</option>
+                <option value="Do weryfikacji">Do weryfikacji</option>
+              </select></div>
+            <p className="caption">„Zatwierdzony” – powiązanie z BZP potwierdzone i brak otwartych propozycji ryzyk. Pozostałe czekają w zakładce „Do weryfikacji”.</p>
           </div>
-          <div className="bar"><div style={{ width: `${(100 * job.done) / Math.max(1, job.total)}%` }} /></div>
-          <div className="log">{job.log.slice(-40).join("\n") || "Start…"}</div>
-        </div>
-      ) : null}
-
-      <div className="panel">
-        <div className="row between">
-          <h3>Projekty ({projects.length})</h3>
-          <input type="text" id="project-filter" placeholder="Filtruj: nazwa, gmina, numer…" value={filter}
-            onChange={(e) => setFilter(e.target.value)} style={{ width: 260 }} />
-        </div>
-        {projects.length ? (
-          <div className="scroll" style={{ maxHeight: 340, overflowY: "auto" }}>
-            <table>
-              <thead><tr><th>ID</th><th>Przedsięwzięcie</th><th>Zamawiający</th><th>Identyfikator</th><th>Powiązanie z BZP</th><th className="num">Braki</th><th className="num">Do oceny</th></tr></thead>
-              <tbody>
-                {shown.map((p) => (
-                  <tr key={p.project_id} className={`click ${selected === p.project_id ? "sel" : ""}`} onClick={() => onSelect(p.project_id)}>
-                    <td className="mono small">{p.project_id}</td><td>{p.name}</td><td className="small">{p.recipient_name}</td>
-                    <td className="small"><span className="muted">{p.public_id_type}</span><br /><span className="mono">{p.public_id}</span></td>
-                    <td>{p.last_fetch_status ? <LinkChip status={p.link_status} /> : <span className="chip neutral">nie pobrano</span>}</td>
-                    <td className="num">{p.n_gaps || ""}</td><td className="num">{p.n_open || ""}</td>
-                  </tr>
-                ))}
+        </aside>
+        <div className="panel flush">
+          <div className="tbl-toolbar">
+            <span>Wyniki: <strong>{shown.length}</strong> z {projects?.length ?? 0} projektów</span>
+            <span>Kliknij wiersz, aby otworzyć kartę szczegółów</span>
+          </div>
+          <div className="scroll-x">
+            <table className="tbl">
+              <thead><tr><th style={{ width: 130 }}>ID</th><th>Gmina / nazwa projektu</th><th>Podsektor</th><th className="num">Kwota umów (brutto)</th><th className="num">Status</th></tr></thead>
+              <tbody className="click">
+                {projects === null ? <tr><td colSpan={5}><Spinner /></td></tr> : shown.length ? shown.map((p) => (
+                  <tr key={p.project_id} className={selected === p.project_id ? "sel" : ""} tabIndex={0}
+                    onClick={() => onSelect(p.project_id)} onKeyDown={(e) => { if (e.key === "Enter") onSelect(p.project_id); }}>
+                    <td><span className="id-badge">{p.project_id}</span></td>
+                    <td><div className="t-main">{p.recipient_name}</div><div className="t-sub">{p.name}</div></td>
+                    <td>{p.subsector}</td>
+                    <td className="num t-main">{p.contract_value != null ? pln(p.contract_value) : <span className="t-sub">brak umowy</span>}</td>
+                    <td className="num"><span className={p.review_status === "Zatwierdzony" ? "status-appr" : "status-pend"}>{p.review_status}</span>
+                      {p.n_open ? <div className="t-sub">{p.n_open} do oceny</div> : null}</td>
+                  </tr>)) : <tr><td colSpan={5} style={{ textAlign: "center", padding: 32 }} className="t-sub">
+                    {projects.length ? "Brak projektów pasujących do filtrów." : "Baza jest pusta – zaimportuj arkusz w zakładce „Dane i reguły”."}</td></tr>}
               </tbody>
             </table>
           </div>
-        ) : <div className="empty">Zaimportuj arkusz, aby zobaczyć projekty.</div>}
+          <div className="tbl-footer">
+            <span>Źródło: Biuletyn Zamówień Publicznych (e-Zamówienia), arkusz projektów organizatora</span>
+            <span>Wartości umów w PLN brutto</span>
+          </div>
+        </div>
       </div>
-
-      {selected ? <ProjectCard pid={selected} refreshKey={refreshKey} onChanged={onChanged} fetching={running} onFetch={(id) => startFetch([id])} /> : null}
-    </>
+      <Drawer pid={selected} project={projects?.find((p) => p.project_id === selected)} onClose={close} />
+    </section>
   );
 }

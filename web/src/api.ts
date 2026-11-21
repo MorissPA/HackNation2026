@@ -22,7 +22,19 @@ export interface Job { id: string; status: string; total: number; done: number; 
   network_calls?: number; sources?: string[] }
 export interface ImportReport { run_id: number; counts: Record<string, number>;
   rows: { row_no: number | null; project_id: string | null; status: string; message: string | null }[] }
-export interface Risk { code: string; name: string; effects: string }
+export interface Risk { code: string; name: string; effects: string; status?: string; proposed_by?: string | null;
+  comment?: string | null; created_at?: string | null; decided_at?: string | null }
+export interface QueueItem {
+  type: "powiazanie" | "ryzyko"; id: string; project_id: string; project: string; recipient: string;
+  // ryzyko
+  event_id?: number; code?: string; title?: string; origin?: string; details?: string; date?: string | null;
+  source_notice?: string | null; source_url?: string | null; source_section?: string | null; notice_label?: string | null;
+  quote?: string | null; before?: string | null; after?: string | null;
+  impact?: { label: string; value_num: number; unit: string }[];
+  // powiązanie
+  ocid?: string; confidence?: string | null; matched?: number | null; checked?: number | null; evidence?: string;
+  candidates?: Candidate[];
+}
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init);
@@ -52,8 +64,15 @@ export const api = {
   proposals: (status: string) => call<Row[]>(`/api/proposals?status=${encodeURIComponent(status)}`),
   decideDocument: (pid: string, url: string, action: "accept" | "reject") =>
     post<{status: string}>(`/api/projects/${encodeURIComponent(pid)}/documents/decision`, {url, action}),
-  decideEvent: (id: number, action: "accept" | "reject", code?: string, comment?: string) =>
-    post<{ status: string }>(`/api/events/${id}/decision`, { action, code, comment }),
+  decideEvent: (id: number, action: "accept" | "reject", code?: string, comment?: string, exemplar = false) =>
+    post<{ status: string }>(`/api/events/${id}/decision`, { action, code, comment, exemplar }),
+  verifyQueue: () => call<QueueItem[]>("/api/verify-queue"),
+  proposeRisk: (name: string, effects?: string) => post<{ code: string; status: string }>("/api/risks", { name, effects }),
+  decideRisk: (code: string, action: "approve" | "reject", comment?: string) =>
+    post<{ status: string }>(`/api/risks/${encodeURIComponent(code)}/decision`, { action, comment }),
+  rules: () => call<{ text: string; updated_at: string | null }>("/api/settings/llm-rules"),
+  saveRules: (text: string) => call<{ text: string; updated_at: string }>("/api/settings/llm-rules", {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) }),
   analyzeRisks: (id: string) =>
     post<{sources: number; created: number; cached: number; abstained: number}>(`/api/projects/${encodeURIComponent(id)}/llm`),
   analyze: (text: string) => post<Row>("/api/analysis", { text }),

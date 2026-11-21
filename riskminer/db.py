@@ -11,7 +11,7 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
 
-from . import config
+from . import config, risks
 
 SCHEMA = """
 PRAGMA journal_mode=WAL;
@@ -326,6 +326,19 @@ def _migrate(con):
     for col in ("expert_title", "expert_comment"):
         if col not in cols:
             con.execute(f"ALTER TABLE event ADD COLUMN {col} TEXT")
+    if "exemplar" not in cols:  # przykład wzorcowy oznaczony przez eksperta
+        con.execute("ALTER TABLE event ADD COLUMN exemplar INTEGER NOT NULL DEFAULT 0")
+    # otwarty katalog ryzyk: R01–R15 + kategorie zaproponowane przez eksperta (do zatwierdzenia)
+    con.execute("""CREATE TABLE IF NOT EXISTS risk_category (
+        code TEXT PRIMARY KEY, name TEXT NOT NULL, effects TEXT,
+        status TEXT NOT NULL DEFAULT 'zatwierdzona',   -- zatwierdzona / proponowana / odrzucona
+        proposed_by TEXT, comment TEXT, created_at TEXT, decided_at TEXT)""")
+    if not con.execute("SELECT count(*) FROM risk_category").fetchone()[0]:
+        con.executemany("INSERT INTO risk_category(code, name, effects, status, proposed_by, created_at) "
+                        "VALUES (?,?,?,'zatwierdzona','materiał ekspercki organizatora',?)",
+                        [(c, n, e, now()) for c, n, e in risks.BASE_CATALOG])
+    # ustawienia edytowalne bez zmian w kodzie (np. reguły interpretacyjne dla modelu)
+    con.execute("CREATE TABLE IF NOT EXISTS setting (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT)")
     cols = {r["name"] for r in con.execute("PRAGMA table_info(link_candidate)")}
     for col, typ in (("confidence", "TEXT"), ("matched", "INTEGER"), ("checked", "INTEGER")):
         if col not in cols:
@@ -344,6 +357,18 @@ def _migrate(con):
                         WHERE NOT EXISTS (SELECT 1 FROM document_link link
                         WHERE link.project_id=item.project_id AND link.url=item.source_url
                         AND link.review_status='odrzucone')""")
+    con.commit()
+    risks.load(con)
+
+
+def get_setting(con, key, default=None):
+    row = con.execute("SELECT value FROM setting WHERE key=?", (key,)).fetchone()
+    return row[0] if row and row[0] is not None else default
+
+
+def set_setting(con, key, value):
+    con.execute("INSERT INTO setting(key, value, updated_at) VALUES (?,?,?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at", (key, value, now()))
     con.commit()
 
 

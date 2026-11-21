@@ -228,15 +228,16 @@ def case_profiles(con) -> list:
         delays = [(date.fromisoformat(c["actual_end"]) - date.fromisoformat(c["planned_end"])).days
                   for c in contracts if c["actual_end"] and c["planned_end"]]
         evs = [dict(e) for e in con.execute(
-            "SELECT id, title, expert_title, status, event_date, source_notice, source_url, source_section, quote "
-            "FROM visible_event WHERE project_id=? AND kind='propozycja' AND status<>'odrzucone'", (p["project_id"],))]
+            "SELECT id, title, expert_title, status, event_date, source_notice, source_url, source_section, quote, "
+            "exemplar FROM visible_event WHERE project_id=? AND kind='propozycja' AND status<>'odrzucone'", (p["project_id"],))]
         risk_hits = {}
         for e in evs:
             code = (e["expert_title"] or e["title"]).split()[0]
-            w = 1.0 if e["status"] in ("zaakceptowane", "poprawione") else 0.5
+            # przykład wzorcowy (oznaczony przez eksperta) > zatwierdzone > propozycja
+            w = 1.5 if e.get("exemplar") else 1.0 if e["status"] in ("zaakceptowane", "poprawione") else 0.5
             r = risk_hits.setdefault(code, {"weight": 0, "confirmed": False, "evidence": []})
             r["weight"] = max(r["weight"], w)
-            r["confirmed"] = r["confirmed"] or w == 1.0
+            r["confirmed"] = r["confirmed"] or w >= 1.0
             r["evidence"].append(e)
         out.append({
             "project_id": p["project_id"], "name": p["name"], "recipient": p["recipient_name"],
