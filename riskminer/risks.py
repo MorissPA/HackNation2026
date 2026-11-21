@@ -1,7 +1,7 @@
 """Katalog ryzyk R01–R15 (z materiału eksperckiego organizatora) + regułowe propozycje kategorii.
 
 Regułowe dopasowanie to punkt startowy: wynik zawsze jest 'propozycją' z cytatem,
-którą zatwierdza ekspert. W kolejnym etapie dołączy do tego model językowy.
+którą zatwierdza ekspert. Oddzielną analizę LLM można uruchomić na karcie projektu.
 """
 import re
 

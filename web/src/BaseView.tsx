@@ -92,7 +92,7 @@ export function BaseView({ stats, selected, onSelect, job, startFetch, refreshKe
         ) : <div className="empty">Zaimportuj arkusz, aby zobaczyć projekty.</div>}
       </div>
 
-      {selected ? <ProjectCard pid={selected} refreshKey={refreshKey} fetching={running} onFetch={(id) => startFetch([id])} /> : null}
+      {selected ? <ProjectCard pid={selected} refreshKey={refreshKey} onChanged={onChanged} fetching={running} onFetch={(id) => startFetch([id])} /> : null}
     </>
   );
 }

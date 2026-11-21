@@ -9,7 +9,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from riskminer import db, importer, pipeline
+from riskminer import db, importer, llm, pipeline
 from riskminer.bzp.client import BZPClient
 
 
@@ -20,6 +20,8 @@ def main():
     f = sub.add_parser("fetch"); f.add_argument("ids", nargs="*"); f.add_argument("--all", action="store_true")
     f.add_argument("--offline", action="store_true")
     s = sub.add_parser("show"); s.add_argument("id")
+    model = sub.add_parser("llm", help="Przeanalizuj przyczyny i ryzyka w dowodach projektu")
+    model.add_argument("id")
     args = ap.parse_args()
     con = db.connect()
 
@@ -38,6 +40,11 @@ def main():
             print(f"==> {pid}: {res['status']} – {res['message']} | faktów {res['facts']}, zdarzeń {res['events']}")
         print("Zapytań sieciowych:", client.n_network_calls,
               "| źródła:", ", ".join(sorted(client.sources_used)) or "tylko cache")
+    elif args.cmd == "llm":
+        try:
+            print(llm.analyze_project(con, args.id))
+        except (llm.ModelError, KeyError) as exc:
+            ap.exit(1, f"Analiza LLM: {exc}\n")
     elif args.cmd == "show":
         pid = args.id
         for t, q in [

@@ -54,6 +54,8 @@ export const api = {
     post<{status: string}>(`/api/projects/${encodeURIComponent(pid)}/documents/decision`, {url, action}),
   decideEvent: (id: number, action: "accept" | "reject", code?: string, comment?: string) =>
     post<{ status: string }>(`/api/events/${id}/decision`, { action, code, comment }),
+  analyzeRisks: (id: string) =>
+    post<{sources: number; created: number; cached: number; abstained: number}>(`/api/projects/${encodeURIComponent(id)}/llm`),
   analyze: (text: string) => post<Row>("/api/analysis", { text }),
   analyzeFile: (file: File) => {
     const fd = new FormData(); fd.append("file", file);

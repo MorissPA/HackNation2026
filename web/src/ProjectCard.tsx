@@ -210,8 +210,33 @@ function Sources({ notices, documents, pid, onReviewed }: { notices: Row[]; docu
   );
 }
 
-export function ProjectCard({ pid, refreshKey, onFetch, fetching }:
-  { pid: string; refreshKey: number; onFetch: (id: string) => void; fetching: boolean }) {
+function ModelAnalysis({ pid, onReviewed }: ReviewProps) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  async function analyze() {
+    setBusy(true);
+    setMessage("");
+    setError("");
+    try {
+      const r = await api.analyzeRisks(pid);
+      setMessage(`Źródła: ${r.sources}. Nowe propozycje: ${r.created}. Wcześniej ocenione: ${r.cached}. Brak podstaw: ${r.abstained}.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      onReviewed();
+      setBusy(false);
+    }
+  }
+  return <div>
+    <button className="btn" disabled={busy} onClick={analyze}>{busy ? <Spinner /> : null} Analizuj przyczyny i ryzyka przez LLM</button>
+    {message && <p role="status">{message}</p>}
+    {error && <ErrorBox error={error} />}
+  </div>;
+}
+
+export function ProjectCard({ pid, refreshKey, onFetch, fetching, onChanged }:
+  { pid: string; refreshKey: number; onFetch: (id: string) => void; fetching: boolean; onChanged: () => void }) {
   const [revision, setRevision] = useState(0);
   const [card, setCard] = useState<Card | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -250,6 +275,7 @@ export function ProjectCard({ pid, refreshKey, onFetch, fetching }:
           </div>
         ) : <div className="gap">Brak powiązania z postępowaniem w BZP.</div>}
         <CandidateList candidates={card.candidates} />
+        <ModelAnalysis key={pid} pid={pid} onReviewed={onChanged} />
       </div>
 
       {card.contracts.map((c) => <ContractBlock key={c.id} c={c} facts={card.facts} />)}

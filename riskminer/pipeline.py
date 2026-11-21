@@ -70,13 +70,13 @@ class Card:
                       ocid=ocid, notice=notice, field=field)
 
     def event(self, etype, title, *, when=None, details=None, kind="fakt", part=0, ocid=None,
-              notice=None, field=None, quote=None):
+              notice=None, field=None, quote=None, section=None):
         row = {
             "project_id": self.pid, "ocid": ocid, "part_no": part or 0, "event_date": when,
             "event_type": etype, "title": title, "details": details, "kind": kind,
             "source_notice": notice["notice_number"] if notice else "arkusz",
             "source_url": notice["source_url"] if notice else None,
-            "source_section": P.loc(field) if field else None,
+            "source_section": section or (P.loc(field) if field else None),
             "quote": quote if quote is not None else (P.quote(field) if field else None),
             "updated_at": self.ts,
         }
@@ -137,7 +137,8 @@ def fetch_project(con, project_id: str, client: BZPClient, log=print) -> dict:
     bip_complete = _bip_evidence(con, card, p, log)
     # Nie kasuj wcześniejszych dowodów po niedostępności źródła.
     for table in ("fact", "event"):
-        con.execute(f"""DELETE FROM {table} WHERE project_id=? AND updated_at<? AND status='do_weryfikacji'
+        preserve_llm = " AND event_type<>'ryzyko LLM'" if table == "event" else ""
+        con.execute(f"""DELETE FROM {table} WHERE project_id=? AND updated_at<? AND status='do_weryfikacji'{preserve_llm}
                     AND ((source_notice LIKE 'BIP: %' AND ?) OR (source_notice NOT LIKE 'BIP: %' AND ?))""",
                     (project_id, card.ts, bip_complete, status == "ok"))
     con.execute(
@@ -682,19 +683,17 @@ def _bip_evidence(con, card, p, log):
                                          "page": f["page"], "quote": f["quote"], "reason": f["reason"],
                                          "location": f["location"], "updated_at": card.ts},
                   ["project_id", "url"], preserve=())
-        card.event("dokument BIP", d["title"][:160], when=d["published_at"], ocid=None, notice=src, quote=f["quote"],
+        card.event("dokument BIP", d["title"][:160], when=d["published_at"], ocid=None, notice=src, quote=f["quote"], section=section,
                    details=f"{f['relation'].capitalize()}." + (f" {status_note.capitalize()}." if status_note else ""))
         for code, frag in risks.propose(f"{d['title']} {f['quote']}"):
             card.event("ryzyko", f"{code} {risks.NAMES[code]}", when=d["published_at"], kind="propozycja", ocid=None,
-                       notice=src, quote=f["quote"],
+                       notice=src, quote=f["quote"], section=section,
                        details=f"Propozycja regułowa z dokumentu BIP ({f['relation']}). Sygnał w tekście: „{frag}”.")
         # łączne nakłady z WPF: „<nazwa> … <rok od> <rok do> <kwota>”
         m = re.search(r"(\d{4}) (\d{4}) (\d{1,3}(?: \d{3})+,\d{2})", f["quote"])
         if m and re.match(r"^\d+\.\d+\.\d+\.\d+\.?\s", f["quote"]) and re.search(r"Wieloletni|WPF", d["title"], re.I):
             card.fact("fakt", "bip_wpf_naklady", f"Łączne nakłady w WPF ({f['relation']}), okres {m.group(1)}–{m.group(2)}",
                       num=P.parse_money(m.group(3)), unit="PLN", level=f["relation"], ocid=None, notice=src, quote=f["quote"])
-        con.execute("UPDATE event SET source_section=? WHERE project_id=? AND source_notice=?",
-                    (section, p["project_id"], src["notice_number"]))
         con.execute("UPDATE fact SET source_section=? WHERE project_id=? AND source_notice=?",
                     (section, p["project_id"], src["notice_number"]))
     con.execute("DELETE FROM document_link WHERE project_id=? AND updated_at<? AND review_status='do_weryfikacji'", (p["project_id"], card.ts))

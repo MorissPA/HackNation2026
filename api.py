@@ -12,7 +12,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel
 
-from riskminer import analysis, db, expert, importer, matcher, pipeline, risks
+from riskminer import analysis, db, expert, importer, llm, matcher, pipeline, risks
 from riskminer.bzp.client import BZPClient
 
 SAMPLE = Path(__file__).resolve().parent.parent / "Risk_Miner_dane_projekty.xlsx"
@@ -131,6 +131,16 @@ def project_card(pid: str, con=Depends(get_con)):
         "notices": notices,
         "documents": documents,
     }
+
+
+@app.post("/api/projects/{pid}/llm")
+def analyze_risks(pid: str, con=Depends(get_con)):
+    try:
+        return llm.analyze_project(con, pid)
+    except KeyError:
+        raise HTTPException(404, "Nie ma takiego projektu")
+    except llm.ModelError as exc:
+        raise HTTPException(502, str(exc))
 
 
 @app.get("/api/notices/html", response_class=HTMLResponse)

@@ -23,9 +23,11 @@ BZP_TIMEOUT_S = float(os.environ.get("BZP_TIMEOUT_S", "40"))
 BZP_SEARCH_CACHE_TTL_H = float(os.environ.get("BZP_SEARCH_CACHE_TTL_H", "24"))
 BZP_MAX_ORG_PAGES = int(os.environ.get("BZP_MAX_ORG_PAGES", "25"))
 
-# Model językowy (używany w kolejnych etapach – ekstrakcja przyczyn/ryzyk).
+# Analiza przyczyn i kategorii ryzyka na żądanie.
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "anthropic")
 LLM_MODEL = os.environ.get("LLM_MODEL", "claude-sonnet-5-5")
+LLAMA_BASE_URL = os.environ.get("LLAMA_BASE_URL", "http://127.0.0.1:8081")
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
 
 USER_AGENT = os.environ.get("RISKMINER_USER_AGENT", "RiskMiner-prototype/0.1 (hackathon)")

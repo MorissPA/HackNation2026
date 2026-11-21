@@ -228,6 +228,27 @@ CREATE TABLE IF NOT EXISTS event (
 );
 
 
+CREATE TABLE IF NOT EXISTS llm_run (
+    source_id INTEGER PRIMARY KEY REFERENCES event(id) ON DELETE CASCADE,
+    signature TEXT NOT NULL,
+    proposal_id INTEGER REFERENCES event(id) ON DELETE CASCADE
+);
+CREATE TRIGGER IF NOT EXISTS invalidate_pending_llm AFTER UPDATE OF quote, source_section, details, source_url ON event
+WHEN OLD.event_type IN ('zmiana_umowy','dokument BIP')
+ AND (NEW.quote IS NOT OLD.quote OR NEW.source_section IS NOT OLD.source_section
+      OR NEW.details IS NOT OLD.details OR NEW.source_url IS NOT OLD.source_url)
+BEGIN
+    DELETE FROM event WHERE id=(SELECT proposal_id FROM llm_run WHERE source_id=OLD.id)
+    AND status='do_weryfikacji';
+    DELETE FROM llm_run WHERE source_id=OLD.id AND proposal_id IS NULL;
+END;
+CREATE TRIGGER IF NOT EXISTS remove_pending_llm BEFORE DELETE ON event
+WHEN OLD.event_type IN ('zmiana_umowy','dokument BIP')
+BEGIN
+    DELETE FROM event WHERE id=(SELECT proposal_id FROM llm_run WHERE source_id=OLD.id)
+    AND status='do_weryfikacji';
+END;
+
 CREATE TABLE IF NOT EXISTS document (
     url           TEXT PRIMARY KEY,
     source        TEXT NOT NULL,           -- np. 'BIP Gminy Zagrodno'
