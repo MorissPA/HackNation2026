@@ -14,7 +14,7 @@ Aplikacja działa na **http://localhost:8000** (jeden port: interfejs i API).
 
 - **Dane:** wolumen `riskminer-data` (`/data` w kontenerze) trzyma bazę SQLite, cache BZP/BIP i model GGUF. Przetrwa `docker compose restart` oraz `down` i `up`. Wyczyścić go można przez `docker compose down -v`.
 - **Arkusz organizatora:** montowany tylko do odczytu jako `/import/Risk_Miner_dane_projekty.xlsx`. Przy pustej bazie importuje się automatycznie przy starcie (`RISKMINER_AUTOIMPORT=1`). Inne położenie pliku: `RISKMINER_XLSX=/ścieżka/do/pliku.xlsx docker compose up -d`. Bez pliku arkusz można wgrać w interfejsie przyciskiem „Wgraj XLSX / CSV”.
-- **Model Qwen** (~1,12 GB, sprawdzany SHA-256) pobiera się do wolumenu przy pierwszej analizie LLM. Kolejne starty korzystają z pobranego pliku.
+- **Model Bielik-11B** (~6,7 GB, sprawdzany SHA-256) pobiera się do wolumenu przy pierwszej analizie LLM. Kolejne starty korzystają z pobranego pliku. Kontener nie ma dostępu do GPU Maca, więc model działa tam na CPU (kilkadziesiąt sekund na fragment) i potrzebuje ok. 8 GB pamięci dla Dockera (Ustawienia → Resources). Najszybciej działa uruchomienie bez kontenera (`npm run start`), które na Macu korzysta z GPU.
 - **Inny port:** `RISKMINER_PORT=9000 docker compose up -d`.
 - **macOS:** paczka organizatora leży zwykle w folderze Pobrane. Przy pierwszym starcie macOS pyta, czy Docker może uzyskać dostęp do tego folderu. Bez zgody kontener zatrzymuje się w stanie „Created”. Zgodę można też włączyć w Ustawienia systemowe → Prywatność i ochrona → Pliki i foldery → Docker.
 - **Pierwsza budowa** obrazu trwa ok. 20 minut, bo `llama-cpp-python` kompiluje się ze źródeł. Obraz waży ok. 1,1 GB, a kolejne budowy korzystają z cache.
@@ -62,7 +62,7 @@ Konfiguracja przez zmienne środowiskowe ([riskminer/config.py](riskminer/config
 | `BZP_MIN_INTERVAL_S` | `2.2` | odstęp między zapytaniami do oficjalnego API BZP (limit 30/min) |
 | `BZP_OFFICIAL_ORG_SCAN` | `0` | `1` = przy włączonej kopii i tak rób pełny przegląd ogłoszeń zamawiającego w oficjalnym API |
 | `BZP_SEARCH_CACHE_TTL_H` | `24` | ważność cache wyszukiwarki; treść ogłoszeń jest cache'owana bez limitu |
-| `LLM_PROVIDER` / `LLM_MODEL` / `LLM_API_KEY` | llama.cpp / Qwen lokalnie | dostawca, model i klucz backendu. Przykłady w [llm.env.example](llm.env.example) |
+| `LLM_PROVIDER` / `LLM_MODEL` / `LLM_API_KEY` | llama.cpp / Bielik-11B lokalnie | dostawca, model i klucz backendu. Przykłady w [llm.env.example](llm.env.example) |
 
 ## Analiza przyczyn przez model językowy
 
@@ -72,7 +72,7 @@ W karcie projektu wybierz **Analizuj przyczyny i ryzyka przez LLM**. Równoważn
 .venv/bin/python cli.py llm RM-2026-003
 ```
 
-Domyślnie backend wykonuje analizę w swoim procesie za pomocą biblioteki `llama-cpp-python`. Przy pierwszej analizie wymagającej modelu aplikacja korzysta z pliku `data/llm/qwen.gguf`. Jeśli go brakuje, pobiera około 1,12 GB i sprawdza sumę SHA-256. Kolejne analizy działają lokalnie, również offline. Wagi pochodzą z [oficjalnego wydania Qwen2.5-1.5B-Instruct Q4_K_M](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF).
+Domyślnie backend wykonuje analizę w swoim procesie za pomocą biblioteki `llama-cpp-python`, modelem [Bielik-11B v2.6 Instruct](https://huggingface.co/speakleash/Bielik-11B-v2.6-Instruct-GGUF) (SpeakLeash, polski model, Apache 2.0) w kwantyzacji Q4_K_M. Przy pierwszej analizie aplikacja korzysta z pliku `data/llm/bielik-11b-v2.6.gguf`; jeśli go brakuje, pobiera około 6,7 GB z przypiętej wersji i sprawdza sumę SHA-256. Kolejne analizy działają lokalnie, również offline.
 
 Własny plik GGUF można wskazać przez `LLM_MODEL_PATH` i opisać przez `LLM_MODEL`. Opcjonalne ustawienia Ollamy i Anthropic znajdują się w [llm.env.example](llm.env.example).
 
@@ -80,10 +80,10 @@ Własny plik GGUF można wskazać przez `LLM_MODEL_PATH` i opisać przez `LLM_MO
 
 | Model | Zbiór testowy (49 fragmentów) | Czas | Gdzie |
 |---|---|---|---|
-| **Bielik-11B v2.6 Instruct** (SpeakLeash, Q4_K_M, ~6,7 GB) | **81,6%** – 37 trafnych, 6 częściowo, 6 błędnych | ~6 s / fragment (Mac, GPU Metal) | `npm run dev` / `npm run start` (domyślnie) |
-| Qwen2.5-1.5B Instruct (Q4_K_M, ~1,1 GB) | 56,1% – 26 trafnych, 3 częściowo, 20 błędnych | ~2,5 s / fragment (CPU) | kontener Docker (domyślnie), słabszy sprzęt |
+| **Bielik-11B v2.6 Instruct** (SpeakLeash, Q4_K_M, ~6,7 GB) – **domyślny** | **81,6%** – 37 trafnych, 6 częściowo, 6 błędnych | ~6 s / fragment (Mac, GPU Metal) | wszędzie (lokalnie, CLI, Docker) |
+| Qwen2.5-1.5B Instruct (Q4_K_M, ~1,1 GB) – wcześniejszy model, do porównań | 56,1% – 26 trafnych, 3 częściowo, 20 błędnych | ~2,5 s / fragment (CPU) | tylko po ustawieniu `LLM_MODEL=qwen2.5-1.5b-instruct` |
 
-Model wybiera `LLM_MODEL` (`bielik-11b-v2.6-instruct` albo `qwen2.5-1.5b-instruct`); oba pliki pobierają się automatycznie z przypiętej wersji i są sprawdzane sumą SHA-256. `LLM_GPU_LAYERS=-1` włącza GPU (Metal), `0` – sam CPU.
+Model wybiera `LLM_MODEL` (`bielik-11b-v2.6-instruct` albo `qwen2.5-1.5b-instruct`); oba pliki pobierają się automatycznie z przypiętej wersji i są sprawdzane sumą SHA-256. `LLM_GPU_LAYERS` domyślnie wynosi `-1` (GPU Metal) na Macu z Apple Silicon i `0` (CPU) gdzie indziej.
 
 Zbiór testowy to [docs/llm_zbior_testowy.csv](docs/llm_zbior_testowy.csv): każdy unikalny fragment źródłowy z oczekiwaną kategorią przyczyny (lub „brak”, gdy dokument nie podaje przyczyny). Etykiety „zespół” zastępuje automatycznie decyzja eksperta z kolejki weryfikacji. Ocena:
 
@@ -271,11 +271,11 @@ Tabele: `project`, `procedure` (OCID), `project_link` (z metodą dopasowania, do
 **Źródła danych (tylko odczyt danych publicznych):**
 - Biuletyn Zamówień Publicznych: kopia ogłoszeń wod-kan udostępniona przez organizatora (`bzp.cytr.us`) i oficjalne API e-Zamówień (`ezamowienia.gov.pl`). Odczyt nie wymaga procedury integracyjnej.
 - Biuletyny Informacji Publicznej gmin z `bip_sources.json` (obecnie BIP Gminy Zagrodno).
-- Model Qwen pobierany jednorazowo z Hugging Face, ze sprawdzeniem sumy SHA-256.
+- Model Bielik-11B pobierany jednorazowo z Hugging Face (przypięta wersja), ze sprawdzeniem sumy SHA-256.
 
 **Gdzie przetwarzane są dane:**
 - Baza SQLite, cache zapytań, dokumenty i decyzje eksperta są lokalnie: na komputerze albo w wolumenie kontenera.
-- Domyślny model językowy (Qwen 2.5 1,5B, llama.cpp) działa w procesie aplikacji na CPU. Fragmenty dokumentów nie opuszczają maszyny i nie jest potrzebny klucz API.
+- Domyślny model językowy (Bielik-11B v2.6, llama.cpp) działa w procesie aplikacji – na Macu na GPU, gdzie indziej na CPU. Fragmenty dokumentów nie opuszczają maszyny i nie jest potrzebny klucz API.
 - Opcjonalnie można ustawić `LLM_PROVIDER=ollama` (serwer na wskazanym hoście) albo `LLM_PROVIDER=anthropic`. W tym drugim przypadku fragmenty trafiają do API Anthropic, zgodnie z warunkami i regionem konta, potencjalnie poza UE. Zmiana dostawcy nie wymaga zmian w kodzie.
 - Aplikacja nie przetwarza danych osobowych poza tym, co jest w publicznych ogłoszeniach: nazwy zamawiających i wykonawców, a przy jednoosobowych firmach także imiona i nazwiska.
 

@@ -98,12 +98,28 @@ WATER_CHECKLIST = [
 
 
 # ================================================================ wejście: tekst z PDF/DOCX
+_UNIT_AFTER = r"\s*(?:RLM|km\b|mb?\b|m[23³²]|zł|PLN|mln|tys|szt|przyłącz|przykanalik|budynk|osób|mieszkańc)"
+
+
+def clean_pdf_text(text: str) -> str:
+    """Tekst z PDF bywa łamany po każdym słowie lub liczbie (tabele, duże nagłówki): „1\n\n200\n\nRLM”.
+    Grupy tysięcy rozbite łamaniem wiersza sklejamy, gdy dalej stoi jednostka – „1 200 RLM”."""
+    text = text.replace("\r", "")
+    # tylko przy pustym wierszu między grupami (tak rozbija je ekstrakcja); pojedyncze łamanie to zwykle osobna pozycja listy
+    rx = re.compile(r"(?<![\d.,])(\d{1,3})[ \t\xa0]*\n[ \t\xa0]*\n\s*(?=\d{3}(?:\s*\d{3})*(?!\d)" + _UNIT_AFTER + ")", re.I)
+    prev = None
+    while prev != text:
+        prev, text = text, rx.sub(r"\1 ", text)
+    # liczba oddzielona od jednostki samymi łamaniami wiersza – jedna spacja
+    return re.sub(r"(\d)[ \t\xa0]*\n\s*(?=(?:RLM|zł|PLN|mln|tys\.?|km|m3|m³)\b)", r"\1 ", text, flags=re.I)
+
+
 def text_from_file(filename: str, content: bytes) -> str:
     name = filename.lower()
     if name.endswith(".pdf"):
         from pypdf import PdfReader
         reader = PdfReader(io.BytesIO(content))
-        text = "\n".join((page.extract_text() or "") for page in reader.pages)
+        text = clean_pdf_text("\n".join((page.extract_text() or "") for page in reader.pages))
         if len(text.strip()) < 50:
             raise ValueError("PDF nie ma warstwy tekstowej (skan) – OCR nie jest obsługiwany. Wklej opis jako tekst.")
         return text
@@ -127,7 +143,8 @@ def _snip(text, m, width=70):
 
 
 def _num(s):
-    return float(s.replace(" ", "").replace("\xa0", "").replace(",", "."))
+    """Liczba z tekstu („1 200”, „1\xa0200,5”). Odstępy tysięcy to spacje; łamanie wiersza z PDF też usuwamy."""
+    return float(re.sub(r"\s+", "", s).replace(",", "."))
 
 
 NUMBER = r"(?<![\d.,])(?:\d{1,3}(?:[ \xa0]\d{3})+|\d+)(?:[.,]\d+)?"
@@ -216,7 +233,7 @@ def extract_features(text: str, choices=None) -> dict:
     length = _resolve(_length_options(t), "length_km", choices, f["conflicts"])
     if length:
         scale["length_km"] = length
-    for key, rx, unit in [("rlm", r"(\d[\d\s]*)\s*RLM", "RLM"), ("flow_m3d", r"(\d[\d\s]*(?:[.,]\d+)?)\s*m\s*[3³]\s*/\s*(d|dob)", "m³/d"),
+    for key, rx, unit in [("rlm", r"(" + NUMBER + r")\s*RLM", "RLM"), ("flow_m3d", r"(" + NUMBER + r")\s*m\s*[3³]\s*/\s*(d|dob)", "m³/d"),
                           ("connections", r"(\d+)\s*(przyłącz|przykanalik)", "szt."),
                           ("buildings", r"(\d+)\s*(budynk|gospodarstw|nieruchomoś)", "szt.")]:
         m = re.search(rx, t, re.I)

@@ -1,4 +1,4 @@
-# Risk Miner – jeden kontener: API (FastAPI) + zbudowany interfejs (Vite) + lokalny model Qwen (llama.cpp, CPU).
+# Risk Miner – jeden kontener: API (FastAPI) + zbudowany interfejs (Vite) + lokalny model Bielik-11B (llama.cpp, CPU).
 # Dane (SQLite, cache, plik GGUF) są w wolumenie /data.
 
 # --- 1. interfejs -------------------------------------------------------------------------

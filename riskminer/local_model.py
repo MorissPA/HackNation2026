@@ -1,4 +1,4 @@
-"""Model Qwen uruchamiany w procesie aplikacji."""
+"""Lokalny model językowy (domyślnie Bielik-11B v2.6) uruchamiany w procesie aplikacji przez llama.cpp."""
 import hashlib
 import os
 import tempfile

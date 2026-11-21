@@ -1,5 +1,7 @@
 """Konfiguracja aplikacji – wartości z env, z rozsądnymi domyślnymi."""
 import os
+import platform
+import sys
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -25,13 +27,16 @@ BZP_MAX_ORG_PAGES = int(os.environ.get("BZP_MAX_ORG_PAGES", "25"))
 
 # Analiza przyczyn i kategorii ryzyka na żądanie.
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "llama.cpp")
-LLM_MODEL = os.environ.get("LLM_MODEL", {"llama.cpp": "qwen2.5-1.5b-instruct",
+LLM_MODEL = os.environ.get("LLM_MODEL", {"llama.cpp": "bielik-11b-v2.6-instruct",
                                          "anthropic": "claude-sonnet-5-5"}.get(LLM_PROVIDER, ""))
 # Modele lokalne (llama.cpp): nazwa -> plik w data/llm; pobierane automatycznie z przypiętej wersji (local_model.MODELS).
 LOCAL_MODEL_FILES = {"qwen2.5-1.5b-instruct": "qwen.gguf", "bielik-11b-v2.6-instruct": "bielik-11b-v2.6.gguf"}
 LLM_MODEL_PATH = Path(os.environ.get("LLM_MODEL_PATH",
-                                     DATA_DIR / "llm" / LOCAL_MODEL_FILES.get(LLM_MODEL, "qwen.gguf")))
-LLM_GPU_LAYERS = int(os.environ.get("LLM_GPU_LAYERS", "0"))  # -1 = wszystkie warstwy na GPU (Metal), 0 = CPU
+                                     DATA_DIR / "llm" / LOCAL_MODEL_FILES.get(LLM_MODEL, "bielik-11b-v2.6.gguf")))
+# -1 = wszystkie warstwy na GPU, 0 = tylko CPU. Domyślnie GPU (Metal) na Macu z Apple Silicon, CPU gdzie indziej
+# (np. w kontenerze Docker na Linuksie, który nie ma dostępu do GPU Maca).
+_APPLE_GPU = sys.platform == "darwin" and platform.machine() == "arm64"
+LLM_GPU_LAYERS = int(os.environ.get("LLM_GPU_LAYERS", "-1" if _APPLE_GPU else "0"))
 LLM_CONTEXT = int(os.environ.get("LLM_CONTEXT", "6144"))
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 LLM_API_KEY = os.environ.get("LLM_API_KEY", "")

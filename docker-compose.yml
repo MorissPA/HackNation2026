@@ -7,7 +7,7 @@ services:
     ports:
       - "${RISKMINER_PORT:-8000}:8000"
     volumes:
-      # SQLite, cache BZP/BIP i model GGUF (~1,1 GB, pobierany przy pierwszej analizie LLM) – przetrwają restart
+      # SQLite, cache BZP/BIP i model Bielik-11B GGUF (~6,7 GB, pobierany przy pierwszej analizie LLM) – przetrwają restart
       - riskminer-data:/data
       # Arkusz organizatora z paczki „materialy_dla_uczestnikow” (katalog wyżej); tylko do odczytu
       - ${RISKMINER_XLSX:-../Risk_Miner_dane_projekty.xlsx}:/import/Risk_Miner_dane_projekty.xlsx:ro

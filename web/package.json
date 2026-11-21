@@ -5,10 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently -k -n api,web -c blue,green \"npm:dev:api\" \"npm:dev:web\"",
-    "dev:api": "LLM_MODEL=${LLM_MODEL:-bielik-11b-v2.6-instruct} LLM_GPU_LAYERS=${LLM_GPU_LAYERS:--1} PYTHONWARNINGS=ignore ../.venv/bin/python -m uvicorn api:app --app-dir .. --host 127.0.0.1 --port 8000",
+    "dev:api": "PYTHONWARNINGS=ignore ../.venv/bin/python -m uvicorn api:app --app-dir .. --host 127.0.0.1 --port 8000",
     "dev:web": "vite",
     "build": "tsc --noEmit && vite build",
-    "start": "npm run build && LLM_MODEL=${LLM_MODEL:-bielik-11b-v2.6-instruct} LLM_GPU_LAYERS=${LLM_GPU_LAYERS:--1} PYTHONWARNINGS=ignore ../.venv/bin/python -m uvicorn api:app --app-dir .. --host 127.0.0.1 --port 8000",
+    "start": "npm run build && PYTHONWARNINGS=ignore ../.venv/bin/python -m uvicorn api:app --app-dir .. --host 127.0.0.1 --port 8000",
     "test": "node --test analysis.test.mjs",
     "typecheck": "tsc --noEmit"
   },

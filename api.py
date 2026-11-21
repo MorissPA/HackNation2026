@@ -487,7 +487,10 @@ class AnalysisRequest(BaseModel):
 def _analyze(con, text, top_k=5, choices=None):
     if len((text or "").strip()) < ANALYSIS_MIN_CHARS:
         raise HTTPException(400, f"Opis musi mieć co najmniej {ANALYSIS_MIN_CHARS} znaków. Podaj zakres, podsektor i skalę inwestycji.")
-    return analysis.analyze(con, text, top_k=top_k, choices=choices)
+    try:
+        return analysis.analyze(con, text, top_k=top_k, choices=choices)
+    except ValueError as exc:  # nietypowy zapis w dokumencie nie może kończyć się błędem 500
+        raise HTTPException(422, f"Nie udało się odczytać cech z opisu ({exc}). Popraw lub wklej opis jako tekst.")
 
 
 @app.post("/api/analysis")

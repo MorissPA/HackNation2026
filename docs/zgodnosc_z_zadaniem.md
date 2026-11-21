@@ -37,7 +37,7 @@ Stan po sprawdzeniu kodu i bazy na paczce organizatora (22 rekordy). Legenda: �
 
 | Wymaganie | Stan | Jak / czego brakuje |
 |---|---|---|
-| Identyfikacja zdarzeń i fragmentów świadczących o ryzyku wg katalogu, do weryfikacji eksperta | ✅ | reguły R01–R15 + lokalny model Qwen (przyczyna, kategoria, cytat ze źródła), wszystko jako propozycje |
+| Identyfikacja zdarzeń i fragmentów świadczących o ryzyku wg katalogu, do weryfikacji eksperta | ✅ | reguły R01–R15 + lokalny model Bielik-11B (przyczyna, kategoria, cytat ze źródła), wszystko jako propozycje |
 | Katalog otwarty – proponowanie nowych kategorii do zatwierdzenia | ❌ | katalog R01–R15 jest w kodzie; brak dodawania kategorii w interfejsie |
 | Skutki w czasie i koszcie | ✅ | wzrost wypłaty, opóźnienie względem terminu pierwotnego, przesunięcie terminu aneksem |
 | Przyczyny zdarzeń | ✅ | z ogłoszeń o zmianie/wykonaniu umowy; model proponuje przyczynę jednym zdaniem z cytatem |
@@ -61,7 +61,7 @@ Stan po sprawdzeniu kodu i bazy na paczce organizatora (22 rekordy). Legenda: �
 
 | Wymaganie | Stan | Jak / czego brakuje |
 |---|---|---|
-| Model ustawiany w konfiguracji, przykładowy plik konfiguracji | ✅ | `LLM_PROVIDER` / `LLM_MODEL` / `LLM_API_KEY`, `llm.env.example`; domyślnie lokalny Qwen bez klucza |
+| Model ustawiany w konfiguracji, przykładowy plik konfiguracji | ✅ | `LLM_PROVIDER` / `LLM_MODEL` / `LLM_API_KEY`, `llm.env.example`; domyślnie lokalny Bielik-11B bez klucza |
 | Informacja, gdzie przetwarzane są dane, licencje | ✅ | LICENSE (MIT); README: źródła, miejsce przetwarzania (lokalnie, w procesie; opcjonalnie Ollama/Anthropic), tabela licencji bibliotek i wag Qwen 2.5 (Apache 2.0) |
 | DOCX i PDF z warstwą tekstową | ✅ | |
 | OCR skanów (atut) | ❌ | 6 skanów w BIP Zagrodna – dowodem tytuł i data |
