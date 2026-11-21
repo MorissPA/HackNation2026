@@ -136,6 +136,21 @@ Oficjalne API jest zapasem: używamy go, gdy kopia nie odpowiada albo nie znajdu
    - Na 7 rekordach KPO z paczki nowe reguły wskazały te same postępowania co wcześniejsza wersja z punktami (7/7). W 3 przypadkach (Grodzisko Dolne, Kleszczewo, Zduny) rozstrzygnęła reguła remisu.
 7. **Części zamówienia.** Ogłoszenie o wyniku ma sekcje „Część N”. Rekord ze `Zakres rekordu = część 2` dostaje tylko umowę z części 2. Ogłoszenia o wykonaniu i o zmianie nie podają numeru części, więc przypisujemy je do umowy po wartości, dacie zawarcia i NIP wykonawcy.
 
+## Sygnały z materiału eksperckiego
+
+Poza kwotami i terminami program wyłapuje zdarzenia z listy „Zmiany i wydarzenia” w materiale eksperckim ([riskminer/signals.py](riskminer/signals.py)). Każde daje zdarzenie typu `sygnał` z cytatem i propozycję kategorii do oceny eksperta:
+
+| Sygnał | Skąd | Propozycja |
+|---|---|---|
+| unieważnienie postępowania lub części | ogłoszenie o wyniku, pkt „Podstawa prawna” i „Przyczyna unieważnienia” | wg art. 255: brak ofert lub odrzucone → R11, cena ponad budżet → R13, uchylenie się wykonawcy → R12 |
+| powtórzone postępowanie | wcześniejsze unieważnione postępowanie zamawiającego o podobnym tytule (do 2 lat wstecz) | jak wyżej + obliczenie „czas stracony na powtórzenie” |
+| zmiana wykonawcy | zmiana umowy na podstawie art. 455 ust. 1 pkt 2 | R12 |
+| odstąpienie, rozwiązanie, wypowiedzenie umowy | opis zmiany lub informacje dodatkowe w ogłoszeniu o wykonaniu | R12 |
+| niewykonanie / nienależyte wykonanie umowy | ogłoszenie o wykonaniu | R12 |
+| wypłata poniżej 90% wartości umowy | ogłoszenie o wykonaniu | — (sygnał do wyjaśnienia) |
+
+W paczce: Gościeradów (RM-2026-006) – pierwsze postępowanie z 2023 r. unieważniono, bo nie wpłynęła żadna oferta, a powtórzenie ogłoszono 223 dni później; 4 umowy wykonane nienależycie; 2 umowy z wypłatą poniżej 90% wartości.
+
 ## Drugie źródło: BIP gminy
 
 Konfiguracja jest w [bip_sources.json](bip_sources.json): NIP zamawiającego → adres BIP. Na razie obsługujemy system **d-bip.pl** (sekcje `?strona=N`, stronicowanie `,m0,sN,pK.html`, załączniki `pliki/…`), z którego korzysta wiele gmin. Kolejną gminę dodaje się wpisem w tym pliku. Zmienna `BIP_SOURCES_FILE` pozwala podać inny plik konfiguracji. Kod jest w [riskminer/bip.py](riskminer/bip.py).

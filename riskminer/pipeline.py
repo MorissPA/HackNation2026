@@ -10,7 +10,7 @@ Poziomy kwot: 'umowa' (pojedyncza umowa/część), 'postępowanie', 'projekt' (z
 import re
 from datetime import date
 
-from . import db, matcher, risks
+from . import db, matcher, risks, signals
 from .bzp import parser as P
 from .bzp.client import BZPClient, BZPError
 
@@ -297,6 +297,7 @@ def _run(con, client, card: Card, p: dict, log):
     _procedure(con, card, p, ocid, base_n, result)
     contracts = _contracts(con, card, p, ocid, result, by_type)
     _timeline_and_risks(con, card, p, ocid, base_n, by_type, contracts)
+    _repeated_procedures(con, client, card, p, ocid, base, log)
     _gaps(card, p, by_type, contracts)
     _project_vs_contracts(card, p, ocid, contracts)
     return {"message": f"{len(notices)} ogłoszeń, {len(contracts)} umów"
@@ -578,8 +579,46 @@ def _contract_facts(con, card: Card, p, c):
                           formula=f"{c['actual_end']} − {new_end} (ujemne = przed terminem)")
 
 
+def _signal(card, title, code, details, *, when, part, ocid, notice, field=None, quote=None):
+    """Sygnał z materiału eksperckiego: zdarzenie z dowodem + propozycja kategorii do oceny eksperta."""
+    card.event("sygnał", title, when=when, part=part, ocid=ocid, notice=notice, field=field, quote=quote, details=details)
+    card.event("ryzyko", f"{code} {risks.NAMES[code]}", when=when, kind="propozycja", part=part, ocid=ocid,
+               notice=notice, field=field, quote=quote,
+               details=f"Propozycja regułowa dla sygnału „{title}”. Kategoria do potwierdzenia przez eksperta.")
+
+
+def _change_signals(card, ch, title, when, part, ocid, notice):
+    """Zmiana wykonawcy (art. 455 ust. 1 pkt 2) i odstąpienie/rozwiązanie umowy w opisie zmiany."""
+    basis = (ch.get("legal_basis") or {}).get("value")
+    if signals.contractor_change(basis):
+        _signal(card, "Zmiana wykonawcy", "R12",
+                f"{title}: zmiana na podstawie {basis} – wykonawcę zastąpiono innym podmiotem.",
+                when=when, part=part, ocid=ocid, notice=notice, field=ch.get("legal_basis"))
+    for key in ("reason", "description"):
+        frag = signals.termination((ch.get(key) or {}).get("value"))
+        if frag:
+            _signal(card, "Odstąpienie lub rozwiązanie umowy", "R12",
+                    f"{title}: w opisie zmiany pojawia się „{frag}”.",
+                    when=when, part=part, ocid=ocid, notice=notice, field=ch.get(key))
+            break
+
+
 def _timeline_and_risks(con, card: Card, p, ocid, base_n, by_type, contracts):
     linked_perf = {c["_perf"]["notice_number"] for c in contracts if c.get("_perf")}
+    want_part = p.get("part_no") or 0
+    for res in by_type.get("TenderResultNotice", []):
+        for part, d in res["ext"].get("by_part", {}).items():
+            if want_part and part and part != want_part:
+                continue
+            cancel = signals.cancellation((d.get("result") or {}).get("value"),
+                                          (d.get("cancel_basis") or {}).get("value"),
+                                          (d.get("cancel_reason") or {}).get("value"))
+            if cancel:
+                _signal(card, "Postępowanie unieważnione" + (f" (część {part})" if part else ""), cancel["code"],
+                        f"Przesłanka: {cancel['label']}" + (f" ({cancel['basis']})" if cancel["basis"] else "") + "."
+                        + (f" Przyczyna: {cancel['reason'][:300]}" if cancel["reason"] else ""),
+                        when=res["publication_date"], part=part, ocid=ocid, notice=res,
+                        field=d.get("cancel_reason") or d.get("cancel_basis") or d.get("result"))
     for n in sum(by_type.values(), []):
         if n["notice_type"] == "ContractPerformingNotice" and n["notice_number"] not in linked_perf:
             continue  # ogłoszenie o wykonaniu innej części postępowania
@@ -608,6 +647,8 @@ def _timeline_and_risks(con, card: Card, p, ocid, base_n, by_type, contracts):
                        details=(f"Wartość zmiany: {val:,.2f} PLN".replace(",", " ") if val is not None else None))
             _risk_proposals(card, ocid, part, n, [x.get("reason"), x.get("description")], title,
                             when=P.parse_date(x["change_date"]["value"]) if x.get("change_date") else n["publication_date"])
+            _change_signals(card, x, title, P.parse_date(x["change_date"]["value"]) if x.get("change_date") else n["publication_date"],
+                            part, ocid, n)
         if perf:
             e = perf["ext"]
             for ch in e.get("changes", []):
@@ -620,6 +661,7 @@ def _timeline_and_risks(con, card: Card, p, ocid, base_n, by_type, contracts):
                            details=("Data zmiany nieznana – zmiana wykazana tylko w ogłoszeniu o wykonaniu. "
                                     + (f"Wartość zmiany: {val:,.2f} PLN".replace(",", " ") if val is not None else "Bez zmiany wynagrodzenia.")))
                 _risk_proposals(card, ocid, part, perf, [ch.get("reason"), ch.get("description")], title)
+                _change_signals(card, ch, title, None, part, ocid, perf)
             if c["actual_end"]:
                 card.event("wykonanie", "Wykonanie umowy" + (" (po terminie pierwotnym)" if (c["on_time"] or "").lower().startswith("nie") else ""),
                            when=c["actual_end"], part=part, ocid=ocid, notice=perf, field=e.get("end_actual"),
@@ -636,6 +678,18 @@ def _timeline_and_risks(con, card: Card, p, ocid, base_n, by_type, contracts):
                            notice=perf, field=e.get("properly"),
                            details="Propozycja regułowa: nienależyte wykonanie umowy wskazuje na problem po stronie "
                                    "wykonawcy lub realizacji. Kategoria do potwierdzenia przez eksperta.")
+            if signals.not_executed((e.get("executed") or {}).get("value")):
+                _signal(card, "Umowa niewykonana", "R12",
+                        "Ogłoszenie o wykonaniu umowy podaje, że umowa nie została wykonana. Przyczynę (odstąpienie, "
+                        "rozwiązanie, upadłość wykonawcy) trzeba ustalić w dokumentach zamawiającego.",
+                        when=when, part=part, ocid=ocid, notice=perf, field=e.get("executed"))
+            for f in e.get("extra_info", []):
+                frag = signals.termination(f["value"])
+                if frag:
+                    _signal(card, "Odstąpienie lub rozwiązanie umowy", "R12",
+                            f"Informacje dodatkowe w ogłoszeniu o wykonaniu wspominają: „{frag}”.",
+                            when=when, part=part, ocid=ocid, notice=perf, field=f)
+                    break
             if c["paid_total"] and c["value"] and c["paid_total"] < 0.9 * c["value"]:
                 card.event("sygnał", "Wypłata niższa niż wartość umowy", when=when, part=part, ocid=ocid, notice=perf,
                            field=e.get("paid_total"),
@@ -647,6 +701,53 @@ def _timeline_and_risks(con, card: Card, p, ocid, base_n, by_type, contracts):
                     txt, dt = (m.group(1), m.group(2)) if m.group(1) else (m.group(3), m.group(4))
                     card.event("odbiór", txt[:120], when=P.parse_date(dt), part=part, ocid=ocid, notice=perf,
                                field=f, quote=txt)
+
+
+def _repeated_procedures(con, client, card, p, ocid, base, log):
+    """Wcześniejsze, unieważnione postępowanie tego samego zamawiającego o podobnym przedmiocie
+    (materiał eksperta: „unieważnione postępowanie i jego powtórzenie są sygnałem ryzyka”)."""
+    title = (base.get("orderObject") or "").strip().strip("„”\"")
+    prefix = title[:30].rsplit(" ", 1)[0] if len(title) > 30 else title
+    base_date = (base.get("publicationDate") or "")[:10]
+    if not prefix or not base_date:
+        return
+    since = f"{int(base_date[:4]) - 2}{base_date[4:]}"
+    try:
+        items = client.search(OrganizationId=base.get("organizationId"), OrderObject=prefix,
+                              PublicationDateFrom=since, NoticeType="TenderResultNotice")
+    except BZPError as e:
+        log(f"[{p['project_id']}] Wyszukiwanie wcześniejszych postępowań nie powiodło się: {e}")
+        return
+    for it in items:
+        if (it.get("tenderId") == ocid or "uniew" not in (it.get("procedureResult") or "").lower()
+                or (it.get("publicationDate") or "")[:10] > base_date
+                or not signals.similar_title(title, it.get("orderObject"))):
+            continue
+        try:
+            n = store_notice(con, client, it)
+        except BZPError:
+            continue
+        for part, d in n["ext"].get("by_part", {}).items():
+            cancel = signals.cancellation((d.get("result") or {}).get("value"),
+                                          (d.get("cancel_basis") or {}).get("value"),
+                                          (d.get("cancel_reason") or {}).get("value"))
+            if not cancel:
+                continue
+            _signal(card, f"Wcześniejsze postępowanie unieważnione: {n['notice_number']}", cancel["code"],
+                    f"Postępowanie {n['notice_number']} ({n['publication_date']}) o podobnym przedmiocie "
+                    f"(„{(n['order_object'] or '')[:120]}”) unieważniono – obecne postępowanie jest jego powtórzeniem. "
+                    f"Przesłanka: {cancel['label']}." + (f" Przyczyna: {cancel['reason'][:250]}" if cancel["reason"] else ""),
+                    when=n["publication_date"], part=0, ocid=ocid, notice=n,
+                    field=d.get("cancel_reason") or d.get("cancel_basis") or d.get("result"))
+            lost = _days(n["publication_date"], base_date)
+            if lost is not None:
+                card.fact("obliczenie", f"czas_powtorzenia_{n['notice_number']}",
+                          "Czas stracony na powtórzenie postępowania", num=lost, unit="dni", level="postępowanie",
+                          ocid=ocid, notice=n,
+                          formula=f"{base_date} (ogłoszenie obecnego postępowania) − {n['publication_date']} "
+                                  f"(wynik unieważnionego {n['notice_number']})",
+                          quote=P.quote(d.get("cancel_reason") or d.get("result")))
+            break
 
 
 def _risk_proposals(card, ocid, part, notice, fields, change_title, when=None):

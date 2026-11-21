@@ -92,9 +92,9 @@ Stan po sprawdzeniu kodu i bazy na paczce organizatora (22 rekordy). Legenda: �
 | Katalog R01–R15, wskazanie „sygnał → zdarzenie → wpływ” | 🟨 | katalog ✅; propozycje mają sygnał i cytat, wpływ liczony dla umowy, nie dla zdarzenia |
 | Zdarzenia: zmiana terminu, wynagrodzenia, zakresu, wykonanie po terminie, wypłata wyższa | ✅ | |
 | Nienależyte wykonanie | ✅ | sygnał z ogłoszenia o wykonaniu (4 umowy w paczce) + propozycja R12 |
-| Niewykonanie, rozwiązanie, odstąpienie od umowy | 🟨 | widoczne tylko pośrednio (wypłata < 90% wartości umowy) |
-| Unieważnienie i powtórzone postępowanie | ❌ | pole wyniku jest parsowane, ale nie daje zdarzenia |
-| Zmiana wykonawcy (art. 455 ust. 1 pkt 2) | ❌ | podstawa prawna zapisana, bez osobnego sygnału |
+| Niewykonanie, rozwiązanie, odstąpienie od umowy | ✅ | „wykonana: Nie” i słowa „odstąpienie / rozwiązanie / wypowiedzenie umowy” w ogłoszeniu o wykonaniu → sygnał + propozycja R12 (w paczce brak takich umów; reguły pokryte testami) |
+| Unieważnienie i powtórzone postępowanie | ✅ | unieważnienie (całości lub części) z przesłanką art. 255 i przyczyną → sygnał + propozycja (np. pkt 3 → R13); wcześniejsze unieważnione postępowanie zamawiającego o podobnym przedmiocie → sygnał + czas stracony na powtórzenie. W paczce: Gościeradów – pierwsze postępowanie unieważnione z braku ofert, powtórka po 223 dniach |
+| Zmiana wykonawcy (art. 455 ust. 1 pkt 2) | ✅ | sygnał + propozycja R12 (w paczce brak takich zmian; reguła pokryta testami) |
 | Odwołanie do KIO, wyniki kontroli NIK | ❌ | brak tych źródeł |
 | Znaczenie podstaw prawnych zmian (art. 455) | 🟨 | podstawa pokazana, bez objaśnienia |
 | Kwoty netto i brutto | ✅ | ostrzeżenie przy porównaniu z wartością szacunkową |

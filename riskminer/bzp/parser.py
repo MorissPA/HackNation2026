@@ -213,6 +213,8 @@ def extract(notice_type: str, html: str) -> dict:
             out["by_part"][p] = {
                 "part_value": find(F, r"^Wartość części", part=p),
                 "result": find(F, r"zakończyło się zawarciem umowy albo unieważnieniem", part=p),
+                "cancel_basis": find(F, r"^Podstawa prawna unieważnienia", part=p),
+                "cancel_reason": find(F, r"^Przyczyna unieważnienia", part=p),
                 "n_offers": find(F, r"^Liczba otrzymanych ofert lub wniosków", part=p),
                 "price_min": find(F, r"najniższą ceną", part=p),
                 "price_max": find(F, r"najwyższą ceną", part=p),
