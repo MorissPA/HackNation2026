@@ -48,9 +48,10 @@ Konfiguracja przez zmienne środowiskowe ([riskminer/config.py](riskminer/config
 | `riskminer/pipeline.py` | Ogłoszenia → postępowanie, umowy, zmiany, fakty, obliczenia, zdarzenia, propozycje ryzyk, braki. |
 | `riskminer/risks.py` | Katalog R01–R15 z materiału eksperckiego i regułowe propozycje kategorii. |
 | `riskminer/db.py` | Schemat SQLite. |
+| `riskminer/analysis.py` | Analiza nowej inwestycji: cechy z opisu/PDF/DOCX, ranking podobnych przypadków, koszty i terminy, flagi i rekomendacje, checklista wodociągowa, eksport CSV/JSON. |
 | `riskminer/expert.py` | Decyzje eksperta (ryzyka, powiązania KPO) – wspólne dla API i Streamlit. |
 | `api.py` | REST API (FastAPI) dla interfejsu w Vite; serwuje też zbudowany `web/dist`. |
-| `web/` | Interfejs: Vite + React + TypeScript (Baza inwestycji z kartą projektu, Weryfikacja eksperta, Analiza nowego projektu – szkielet). |
+| `web/` | Interfejs: Vite + React + TypeScript (Baza inwestycji z kartą projektu, Weryfikacja eksperta, Analiza nowego projektu). |
 | `app.py` | Wcześniejszy interfejs w Streamlit (te same funkcje, ta sama baza). |
 
 ## Źródło: BZP – jak łączymy ogłoszenia
@@ -86,6 +87,36 @@ Oficjalne API jest zapasem: używamy go, gdy kopia nie odpowiada albo nie znajdu
 
    Gdy najlepszy kandydat ma co najmniej 60 pkt i 15 pkt przewagi nad drugim, powiązanie dostaje status **proponowane**, a karta liczy się od razu. W przeciwnym razie system nie tworzy powiązania i ekspert wybiera kandydata w panelu **Weryfikacja eksperta → Powiązania z BZP**. Ekspert może potwierdzić propozycję, wybrać innego kandydata albo ją odrzucić. Odrzucony OCID jest pomijany w kolejnych rankingach, każda decyzja trafia do `expert_decision`, a przypadek przelicza się automatycznie.
 7. **Części zamówienia.** Ogłoszenie o wyniku ma sekcje „Część N”. Rekord ze `Zakres rekordu = część 2` dostaje tylko umowę z części 2. Ogłoszenia o wykonaniu i o zmianie nie podają numeru części, więc przypisujemy je do umowy po wartości, dacie zawarcia i NIP wykonawcy.
+
+## Analiza nowego projektu
+
+1. **Cechy z opisu** (tekst albo PDF z warstwą tekstową / DOCX). Każda cecha ma fragment źródłowy:
+   - podsektor główny i dodatkowe (taksonomia organizatora),
+   - rodzaj prac, formuła realizacji,
+   - skala (km, RLM, m³/d, przyłącza), budżet, termin,
+   - znane ograniczenia (odbiornik ścieków i pozwolenie wodnoprawne, grunty prywatne, kolizje, przekroczenia, obiekt w eksploatacji, azbest, warunki gruntowe).
+2. **Profile przypadków z bazy.** Opis przedmiotu z ogłoszenia o zamówieniu (albo opis KPO), wartości umów, wypłaty, terminy, opóźnienia i ryzyka. Ryzyka zatwierdzone przez eksperta ważą 1, propozycje 0,5, odrzucone są pomijane.
+3. **Ranking podobieństwa**, w punktach:
+
+   | Cecha | Punkty |
+   |---|---|
+   | podsektor | 35 |
+   | podsektory dodatkowe | 5 |
+   | rodzaj prac | 10 |
+   | formuła | 15 |
+   | budżet względem wartości umów | 10 |
+   | długość sieci | 5 |
+   | podobieństwo opisu | 20 |
+   | ograniczenia | 5 |
+
+   Wynik to suma punktów za cechy, które da się porównać. Przy każdym przypadku widać, co pasuje, co się różni i czego brakuje.
+4. **Raport:**
+   - wzrost wypłaty, opóźnienie i okres realizacji z liczebnością próby; przy n ≥ 3 mediana i zakres, przy mniejszej próbie wartości per przypadek z informacją, czego brakuje,
+   - flagi R01–R15 z siłą sygnału, podstawą i dowodami, a do każdej działanie i zapis do sprawdzenia w SWZ lub umowie,
+   - dla sieci wodociągowych checklista 9 pytań z poradnika organizatora.
+5. **Eksport** do CSV (separator `;`, z BOM dla Excela) i JSON.
+
+Ogłoszenie o wykonaniu umowy, które podaje „wykonana należycie: Nie” albo wypłatę poniżej 90% wartości umowy, daje zdarzenie typu `sygnał` i propozycję R12 do oceny eksperta.
 
 ## Model danych
 

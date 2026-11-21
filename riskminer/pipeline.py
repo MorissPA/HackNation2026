@@ -596,6 +596,23 @@ def _timeline_and_risks(con, card: Card, p, ocid, base_n, by_type, contracts):
                 card.event("wykonanie", "Wykonanie umowy" + (" (po terminie pierwotnym)" if (c["on_time"] or "").lower().startswith("nie") else ""),
                            when=c["actual_end"], part=part, ocid=ocid, notice=perf, field=e.get("end_actual"),
                            details=(f"Wypłacono łącznie {c['paid_total']:,.2f} PLN".replace(",", " ") if c["paid_total"] else None))
+            # sygnały z ogłoszenia o wykonaniu (materiał eksperta: „nienależyte wykonanie albo kara umowna”)
+            when = c["actual_end"] or perf["publication_date"]
+            if (c["properly_executed"] or "").lower().startswith("nie"):
+                card.event("sygnał", "Umowa wykonana nienależycie", when=when, part=part, ocid=ocid, notice=perf,
+                           field=e.get("properly"),
+                           details="Ogłoszenie o wykonaniu umowy podaje, że umowa nie została wykonana należycie. "
+                                   "Przyczyna (kary, odstąpienie, wady) nie wynika z ogłoszenia – wymaga sprawdzenia "
+                                   "w dokumentach zamawiającego (BIP, protokoły).")
+                card.event("ryzyko", f"R12 {risks.NAMES['R12']}", when=when, kind="propozycja", part=part, ocid=ocid,
+                           notice=perf, field=e.get("properly"),
+                           details="Propozycja regułowa: nienależyte wykonanie umowy wskazuje na problem po stronie "
+                                   "wykonawcy lub realizacji. Kategoria do potwierdzenia przez eksperta.")
+            if c["paid_total"] and c["value"] and c["paid_total"] < 0.9 * c["value"]:
+                card.event("sygnał", "Wypłata niższa niż wartość umowy", when=when, part=part, ocid=ocid, notice=perf,
+                           field=e.get("paid_total"),
+                           details=(f"Wypłacono {c['paid_total'] / c['value']:.0%} wartości umowy. Możliwe przyczyny: "
+                                    "ograniczenie zakresu, kary umowne, odstąpienie od umowy – ogłoszenie ich nie rozstrzyga."))
             for f in e.get("extra_info", []):
                 for m in re.finditer(r"(Pozwolenie na użytkowanie[^\n]*?z dnia (\d{1,2}\.\d{1,2}\.\d{4}))|"
                                      r"(Protokół[^\n]*?odbior[^\n]*?z dnia (\d{1,2}\.\d{1,2}\.\d{4}))", f["value"]):

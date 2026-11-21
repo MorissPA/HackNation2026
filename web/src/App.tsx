@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type Job, type Stats } from "./api";
 import { BaseView } from "./BaseView";
 import { ExpertView } from "./ExpertView";
+import { AnalysisView } from "./AnalysisView";
 
 type View = "baza" | "weryfikacja" | "analiza";
 const VIEWS: { id: View; label: string }[] = [
@@ -72,17 +73,7 @@ export default function App() {
             startFetch={startFetch} refreshKey={refreshKey} onChanged={refresh} />
         )}
         {view === "weryfikacja" && <ExpertView onChanged={refresh} />}
-        {view === "analiza" && (
-          <>
-            <h2>Analiza nowego projektu</h2>
-            <div className="panel">
-              <p>Ten widok jest w przygotowaniu. Plan: opis inwestycji albo PDF/DOCX → cechy (podsektor, typ robót, skala,
-                formuła realizacji, budżet, termin) → ranking podobnych przypadków z bazy z wyjaśnieniem, porównanie kosztów
-                i terminów z liczebnością próby, flagi i rekomendacje oraz eksport do CSV lub JSON.</p>
-              <p className="muted">Dla sieci wodociągowych pytania formularza oprze się na checkliście z materiału eksperckiego organizatora.</p>
-            </div>
-          </>
-        )}
+        {view === "analiza" && <AnalysisView />}
       </main>
     </div>
   );

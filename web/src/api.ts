@@ -50,6 +50,17 @@ export const api = {
   proposals: (status: string) => call<Row[]>(`/api/proposals?status=${encodeURIComponent(status)}`),
   decideEvent: (id: number, action: "accept" | "reject", code?: string, comment?: string) =>
     post<{ status: string }>(`/api/events/${id}/decision`, { action, code, comment }),
+  analyze: (text: string) => post<Row>("/api/analysis", { text }),
+  analyzeFile: (file: File) => {
+    const fd = new FormData(); fd.append("file", file);
+    return call<Row>("/api/analysis/file", { method: "POST", body: fd });
+  },
+  exportAnalysis: async (text: string, format: "csv" | "json") => {
+    const res = await fetch(`/api/analysis/export?format=${format}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    return res.blob();
+  },
   kpoLinks: () => call<Row[]>("/api/kpo-links"),
   decideLink: (pid: string, action: "confirm" | "reject", ocid?: string, comment?: string) =>
     post<Row>(`/api/projects/${encodeURIComponent(pid)}/link`, { action, ocid, comment }),

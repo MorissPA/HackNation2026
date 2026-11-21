@@ -9,10 +9,10 @@ import uuid
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel
 
-from riskminer import db, expert, importer, matcher, pipeline, risks
+from riskminer import analysis, db, expert, importer, matcher, pipeline, risks
 from riskminer.bzp.client import BZPClient
 
 SAMPLE = Path(__file__).resolve().parent.parent / "Risk_Miner_dane_projekty.xlsx"
@@ -252,6 +252,46 @@ def link_decision(pid: str, d: LinkDecision, con=Depends(get_con)):
     except ValueError as e:
         raise HTTPException(400, str(e))
     return {"result": res}
+
+
+# --------------------------------------------------------------------------- analiza nowego projektu
+class AnalysisRequest(BaseModel):
+    text: str
+    top_k: int = 5
+
+
+def _analyze(con, text, top_k=5):
+    if len((text or "").strip()) < 30:
+        raise HTTPException(400, "Opis jest za krótki – podaj co najmniej zakres, podsektor i skalę inwestycji.")
+    return analysis.analyze(con, text, top_k=top_k)
+
+
+@app.post("/api/analysis")
+def run_analysis(req: AnalysisRequest, con=Depends(get_con)):
+    return _analyze(con, req.text, req.top_k)
+
+
+@app.post("/api/analysis/file")
+async def run_analysis_file(file: UploadFile = File(...), con=Depends(get_con)):
+    try:
+        text = analysis.text_from_file(file.filename, await file.read())
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:  # uszkodzony plik
+        raise HTTPException(400, f"Nie udało się odczytać pliku: {e}")
+    return _analyze(con, text)
+
+
+@app.post("/api/analysis/export")
+def export_analysis(req: AnalysisRequest, format: str = "csv", con=Depends(get_con)):
+    result = _analyze(con, req.text, req.top_k)
+    if format == "json":
+        body = json.dumps(result, ensure_ascii=False, indent=2)
+        return Response(body, media_type="application/json",
+                        headers={"Content-Disposition": 'attachment; filename="risk_miner_analiza.json"'})
+    body = "\ufeff" + analysis.to_csv(result)  # BOM: polskie znaki poprawnie w Excelu
+    return Response(body, media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": 'attachment; filename="risk_miner_analiza.csv"'})
 
 
 # --------------------------------------------------------------------------- zbudowany frontend
