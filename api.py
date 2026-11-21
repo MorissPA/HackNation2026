@@ -168,7 +168,7 @@ def verify_queue(con=Depends(get_con)):
                       "evidence": l["evidence"], "candidates": cands})
     for e in rows(con, "SELECT e.*, p.name AS project, p.recipient_name AS recipient FROM visible_event e "
                        "JOIN project p USING(project_id) WHERE e.kind='propozycja' AND e.status='do_weryfikacji' "
-                       "ORDER BY e.project_id, COALESCE(e.event_date,''), e.id"):
+                       "ORDER BY (e.confidence='niska') DESC, e.project_id, COALESCE(e.event_date,''), e.id"):
         before, after = _context(con, e["source_notice"], e["source_section"])
         n = con.execute("SELECT notice_type FROM notice WHERE notice_number=?", (e["source_notice"],)).fetchone()
         impact = rows(con, "SELECT label, value_num, unit FROM visible_fact WHERE project_id=? AND part_no=? AND key IN "
@@ -181,7 +181,8 @@ def verify_queue(con=Depends(get_con)):
                       "source_url": e["source_url"], "source_section": e["source_section"],
                       "notice_label": pipeline.NOTICE_LABELS.get(n["notice_type"], n["notice_type"]) if n else
                                       ("Dokument z BIP" if (e["source_notice"] or "").startswith("BIP") else None),
-                      "quote": e["quote"], "before": before, "after": after, "impact": impact})
+                      "quote": e["quote"], "before": before, "after": after, "impact": impact,
+                      "llm_confidence": e["confidence"] if e["event_type"] == "ryzyko LLM" else None})
     return items
 
 

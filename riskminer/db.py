@@ -328,6 +328,8 @@ def _migrate(con):
             con.execute(f"ALTER TABLE event ADD COLUMN {col} TEXT")
     if "exemplar" not in cols:  # przykład wzorcowy oznaczony przez eksperta
         con.execute("ALTER TABLE event ADD COLUMN exemplar INTEGER NOT NULL DEFAULT 0")
+    if "confidence" not in cols:  # pewność propozycji modelu: 'wysoka' (zgodna z regułami) / 'niska'
+        con.execute("ALTER TABLE event ADD COLUMN confidence TEXT")
     # otwarty katalog ryzyk: R01–R15 + kategorie zaproponowane przez eksperta (do zatwierdzenia)
     con.execute("""CREATE TABLE IF NOT EXISTS risk_category (
         code TEXT PRIMARY KEY, name TEXT NOT NULL, effects TEXT,

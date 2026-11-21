@@ -29,7 +29,7 @@ export interface QueueItem {
   // ryzyko
   event_id?: number; code?: string; title?: string; origin?: string; details?: string; date?: string | null;
   source_notice?: string | null; source_url?: string | null; source_section?: string | null; notice_label?: string | null;
-  quote?: string | null; before?: string | null; after?: string | null;
+  quote?: string | null; before?: string | null; after?: string | null; llm_confidence?: string | null;
   impact?: { label: string; value_num: number; unit: string }[];
   // powiązanie
   ocid?: string; confidence?: string | null; matched?: number | null; checked?: number | null; evidence?: string;

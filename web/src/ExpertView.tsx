@@ -38,7 +38,12 @@ function RiskItem({ item, risks, onDone }: { item: QueueItem; risks: Risk[]; onD
               <h2 className="panel-title">{item.project}</h2>
               <div className="panel-sub">{item.recipient}</div>
             </div>
-            <span className="conf" title="Skąd pochodzi propozycja">Źródło: <b>{item.origin}</b></span>
+            <span className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
+              <span className="conf" title="Skąd pochodzi propozycja">Źródło: <b>{item.origin}</b></span>
+              {item.llm_confidence ? <span className={`chip ${item.llm_confidence === "niska" ? "warn" : "ok"}`}
+                title="Wysoka: kategoria modelu zgadza się z regułami słownikowymi dla tego tekstu; niska: nie zgadza się – sprawdź uważnie">
+                pewność {item.llm_confidence}</span> : null}
+            </span>
           </div>
           <div>
             <label className="lbl" htmlFor="v-code">Kategoria ryzyka</label>
@@ -216,7 +221,7 @@ export function VerifyView({ onChanged }: { onChanged: () => void }) {
               <tr key={q.id} className={i === pos ? "sel" : ""} onClick={() => setIdx(i)}>
                 <td><span className="id-badge">{q.project_id}</span></td>
                 <td><div className="t-main">{q.type === "ryzyko" ? q.title : "Powiązanie KPO → BZP"}</div><div className="t-sub">{q.project}</div></td>
-                <td className="num t-sub">{q.type === "ryzyko" ? q.origin : `pewność ${q.confidence ?? "—"}`}</td>
+                <td className="num t-sub">{q.type === "ryzyko" ? `${q.origin}${q.llm_confidence ? ` · pewność ${q.llm_confidence}` : ""}` : `pewność ${q.confidence ?? "—"}`}</td>
               </tr>))}</tbody></table>
           </div>
         </details>) : null}
