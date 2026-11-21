@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently -k -n api,web -c blue,green \"npm:dev:api\" \"npm:dev:web\"",
-    "dev:api": "PYTHONWARNINGS=ignore ../.venv/bin/python -m uvicorn api:app --app-dir .. --host 127.0.0.1 --port 8080",
+    "dev:api": "PYTHONWARNINGS=ignore ../.venv/bin/python -m uvicorn api:app --app-dir .. --host 127.0.0.1 --port 8000",
     "dev:web": "vite",
     "build": "tsc --noEmit && vite build",
     "start": "npm run build && PYTHONWARNINGS=ignore ../.venv/bin/python -m uvicorn api:app --app-dir .. --host 127.0.0.1 --port 8000",
@@ -22,5 +22,9 @@
     "concurrently": "^9.1.0",
     "typescript": "^5.6.3",
     "vite": "^6.0.3"
+  },
+  "allowScripts": {
+    "esbuild@0.25.12": true,
+    "fsevents@2.3.3": true
   }
 }

@@ -10,7 +10,7 @@ Wymagania: Python 3.9+ i Node.js 18+.
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 cd web && npm install
-npm run dev        # API (FastAPI) na :8080 + interfejs (Vite) na http://localhost:5173
+npm run dev        # API (FastAPI) na :8000 + interfejs (Vite) na http://localhost:5173
 ```
 
 W interfejsie kliknij **Importuj paczkę organizatora** (plik `../Risk_Miner_dane_projekty.xlsx`), a potem **Pobierz z BZP wszystkie rekordy**.
