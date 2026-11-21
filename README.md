@@ -4,13 +4,26 @@ Aplikacja dla eksperta inwestycji wodno-ściekowych. Importuje arkusz projektów
 
 ## Uruchomienie
 
+Wymagania: Python 3.9+ i Node.js 18+.
+
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-.venv/bin/python cli.py import ../Risk_Miner_dane_projekty.xlsx   # import arkusza
-.venv/bin/python cli.py fetch RM-2026-003                          # Steklin z BZP
-.venv/bin/streamlit run app.py                                     # UI: http://localhost:8501
+cd web && npm install
+npm run dev        # API (FastAPI) na :8000 + interfejs (Vite) na http://localhost:5173
 ```
+
+W interfejsie kliknij **Importuj paczkę organizatora** (plik `../Risk_Miner_dane_projekty.xlsx`), a potem **Pobierz z BZP wszystkie rekordy**.
+
+Inne sposoby uruchomienia:
+
+| Polecenie | Co robi |
+|---|---|
+| `cd web && npm start` | buduje interfejs i serwuje całość z jednego procesu na http://localhost:8000 |
+| `.venv/bin/uvicorn api:app --port 8000` | samo REST API (dokumentacja: http://localhost:8000/docs) |
+| `.venv/bin/streamlit run app.py` | wcześniejszy interfejs w Streamlit, http://localhost:8501 (ta sama baza) |
+| `.venv/bin/python cli.py import ../Risk_Miner_dane_projekty.xlsx` | import arkusza z terminala |
+| `.venv/bin/python cli.py fetch RM-2026-003` | pobranie jednego rekordu z BZP |
 
 Inne polecenia: `cli.py fetch --all` (wszystkie rekordy), `cli.py show RM-2026-003` (podsumowanie karty w terminalu).
 
@@ -19,7 +32,9 @@ Konfiguracja przez zmienne środowiskowe ([riskminer/config.py](riskminer/config
 | Zmienna | Domyślnie | Opis |
 |---|---|---|
 | `RISKMINER_DB` | `data/riskminer.sqlite` | plik SQLite (w kontenerze na trwałym wolumenie) |
-| `BZP_MIN_INTERVAL_S` | `2.2` | odstęp między zapytaniami do BZP (limit 30/min) |
+| `BZP_MIRROR_BASE` | `https://bzp.cytr.us/mo-board/api/v1` | kopia ogłoszeń wod-kan od organizatora, źródło główne (pusta wartość = tylko oficjalne API) |
+| `BZP_MIN_INTERVAL_S` | `2.2` | odstęp między zapytaniami do oficjalnego API BZP (limit 30/min) |
+| `BZP_OFFICIAL_ORG_SCAN` | `0` | `1` = przy włączonej kopii i tak rób pełny przegląd ogłoszeń zamawiającego w oficjalnym API |
 | `BZP_SEARCH_CACHE_TTL_H` | `24` | ważność cache wyszukiwarki; treść ogłoszeń jest cache'owana bez limitu |
 | `LLM_PROVIDER` / `LLM_MODEL` / `LLM_API_KEY` | – | model do ekstrakcji przyczyn (kolejny etap) |
 
@@ -33,9 +48,20 @@ Konfiguracja przez zmienne środowiskowe ([riskminer/config.py](riskminer/config
 | `riskminer/pipeline.py` | Ogłoszenia → postępowanie, umowy, zmiany, fakty, obliczenia, zdarzenia, propozycje ryzyk, braki. |
 | `riskminer/risks.py` | Katalog R01–R15 z materiału eksperckiego i regułowe propozycje kategorii. |
 | `riskminer/db.py` | Schemat SQLite. |
-| `app.py` | Streamlit: Baza inwestycji, Weryfikacja eksperta, Analiza nowego projektu (szkielet). |
+| `riskminer/expert.py` | Decyzje eksperta (ryzyka, powiązania KPO) – wspólne dla API i Streamlit. |
+| `api.py` | REST API (FastAPI) dla interfejsu w Vite; serwuje też zbudowany `web/dist`. |
+| `web/` | Interfejs: Vite + React + TypeScript (Baza inwestycji z kartą projektu, Weryfikacja eksperta, Analiza nowego projektu – szkielet). |
+| `app.py` | Wcześniejszy interfejs w Streamlit (te same funkcje, ta sama baza). |
 
 ## Źródło: BZP – jak łączymy ogłoszenia
+
+**Skąd dane.** Głównym źródłem jest kopia ogłoszeń o robotach wod-kan udostępniona przez organizatora (`bzp.cytr.us`). Ma ten sam endpoint `/notice` co API BZP i nie ma limitu zapytań. Pełne przeliczenie 22 rekordów przy pustym cache trwa ok. 1 minuty. Kopia różni się od oficjalnego API:
+- nie ma wyszukiwarki `Board/Search` – emulujemy ją zapytaniami `/notice` per typ ogłoszenia z filtrem `OrderObject` i filtrowaniem po zamawiającym po stronie klienta,
+- nie stronicuje (maks. 500 wyników na zapytanie) – przy ogólnych frazach wynik bywa ucięty, co aplikacja zapisuje w logu,
+- zawiera tylko 4 typy ogłoszeń: o zamówieniu, o wyniku, o zmianie umowy, o wykonaniu umowy. **Brak ogłoszeń o zmianie ogłoszenia** (modyfikacje SWZ/terminów), więc nie ma ich na osi czasu,
+- nie podaje `moIdentifier`, więc link „Otwórz w BZP” zostaje z wcześniejszego pobrania z oficjalnej wyszukiwarki, jeśli takie było.
+
+Oficjalne API jest zapasem: używamy go, gdy kopia nie odpowiada albo nie znajduje ogłoszenia o podanym numerze. W regresji na 22 rekordach z kopii poszło 274 zapytań, a z oficjalnego API 1 (numer Wolina, którego nie ma nigdzie). Powiązania, umowy, kwoty i obliczenia wyszły identyczne jak przy samym oficjalnym API.
 
 1. `GET /Board/Search?NoticeNumber=<numer z arkusza>` zwraca ogłoszenie bazowe, a z nim **identyfikator postępowania (OCID)** i identyfikator zamawiającego.
 2. Ogłoszenia powiązane (wynik, zmiany umowy, wykonanie):

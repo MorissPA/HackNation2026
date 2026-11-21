@@ -108,9 +108,12 @@ def store_notice(con, client: BZPClient, meta: dict) -> dict:
         "html": html, "text": P.html_to_text(html), "fields_json": db.dumps(ext["fields"]),
         "source_url": client.public_url(full), "fetched_at": db.now(),
     }
-    old = con.execute("SELECT fetched_at FROM notice WHERE notice_number=?", (row["notice_number"],)).fetchone()
+    old = con.execute("SELECT fetched_at, source_url FROM notice WHERE notice_number=?", (row["notice_number"],)).fetchone()
     if old:  # treść się nie zmienia – zachowujemy pierwotną datę pobrania
         row["fetched_at"] = old["fetched_at"]
+        # kopia organizatora nie podaje moIdentifier – zostawiamy link z oficjalnej wyszukiwarki, jeśli był
+        if not full.get("moIdentifier") and old["source_url"]:
+            row["source_url"] = old["source_url"]
     db.upsert(con, "notice", row, ["notice_number"], preserve=())
     row["ext"] = ext
     return row

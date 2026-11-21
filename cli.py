@@ -36,7 +36,8 @@ def main():
         for pid in ids:
             res = pipeline.fetch_project(con, pid, client, log=print)
             print(f"==> {pid}: {res['status']} – {res['message']} | faktów {res['facts']}, zdarzeń {res['events']}")
-        print("Zapytań sieciowych:", client.n_network_calls)
+        print("Zapytań sieciowych:", client.n_network_calls,
+              "| źródła:", ", ".join(sorted(client.sources_used)) or "tylko cache")
     elif args.cmd == "show":
         pid = args.id
         for t, q in [

@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
-from riskminer import db, importer, pipeline, risks
+from riskminer import db, expert, importer, pipeline, risks
 from riskminer.bzp.client import BZPClient
 
 st.set_page_config(page_title="Risk Miner", page_icon="⛏️", layout="wide")
@@ -280,50 +280,18 @@ def view_links():
     comment = st.text_input("Uzasadnienie powiązania", key=f"linkcom{pid}")
     c1, c2, _ = st.columns([1, 1, 2])
     if c1.button("✔ Potwierdź wybrane powiązanie", width="stretch"):
-        confirm_link(pid, cur, next(c for c in cands if c["ocid"] == choice), comment)
+        with st.spinner("Przeliczam przypadek na podstawie BZP…"):
+            expert.confirm_link(con, pid, choice, comment)
+        st.rerun()
     if cur["link_id"] and c2.button("✖ Odrzuć obecne powiązanie", width="stretch"):
-        reject_link(pid, cur, comment)
+        with st.spinner("Przeliczam przypadek na podstawie BZP…"):
+            expert.reject_link(con, pid, comment)
+        st.rerun()
     hist = q("SELECT d.* FROM expert_decision d JOIN project_link l ON d.target='project_link' AND d.target_id=l.id "
              "WHERE l.project_id=? ORDER BY d.id", (pid,))
     if hist:
         st.caption("Historia: " + " · ".join(f"{h['created_at'][:16]} {h['decision']} {h['new_value'] or h['old_value'] or ''}"
                                              f"{(' – ' + h['comment']) if h['comment'] else ''}" for h in hist))
-
-
-def _refetch(pid):
-    with st.spinner("Przeliczam przypadek na podstawie BZP…"):
-        pipeline.fetch_project(con, pid, BZPClient(con), log=lambda m: None)
-
-
-def _decision(link_id, decision, comment, old, new):
-    con.execute("INSERT INTO expert_decision(target,target_id,decision,comment,old_value,new_value,author,created_at) "
-                "VALUES ('project_link',?,?,?,?,?,?,?)", (link_id, decision, comment, old, new, "ekspert", db.now()))
-
-
-def confirm_link(pid, cur, cand, comment):
-    ts = db.now()
-    same = bool(cur["link_id"]) and cur["ocid"] == cand["ocid"]
-    if cur["link_id"] and not same:
-        con.execute("UPDATE project_link SET status='odrzucone', updated_at=? WHERE id=?", (ts, cur["link_id"]))
-        _decision(cur["link_id"], "odrzucone", comment, cur["ocid"], None)
-    link_id = db.upsert(con, "project_link", {
-        "project_id": pid, "ocid": cand["ocid"], "part_no": 0, "method": cur["method"] if same else "ekspert",
-        "score": cand["score"] / 100, "status": "potwierdzone",
-        "evidence": (f"Potwierdzone przez eksperta. Kandydat nr {cand['rank']} ({cand['score']:.0f}/100): {cand['title'][:120]}."
-                     + (f" Uzasadnienie: {comment}" if comment else "")),
-        "created_at": ts, "updated_at": ts}, ["project_id", "ocid"], preserve=("created_at",))
-    _decision(link_id, "zaakceptowane" if same else "poprawione", comment, cur["ocid"], cand["ocid"])
-    con.commit()
-    _refetch(pid)
-    st.rerun()
-
-
-def reject_link(pid, cur, comment):
-    con.execute("UPDATE project_link SET status='odrzucone', updated_at=? WHERE id=?", (db.now(), cur["link_id"]))
-    _decision(cur["link_id"], "odrzucone", comment, cur["ocid"], None)
-    con.commit()
-    _refetch(pid)
-    st.rerun()
 
 
 def view_risks():
@@ -351,11 +319,12 @@ def view_risks():
                                     key=f"code{e['id']}", format_func=lambda c: f"{c} {risks.NAMES[c]}")
             comment = c4.text_input("Uzasadnienie decyzji", key=f"com{e['id']}", value=e.get("expert_comment") or "")
             c1, c2, _ = st.columns([1, 1, 3])
-            orig = e["title"].split()[0]
             if c1.button("✔ Akceptuj", key=f"ok{e['id']}", width="stretch"):
-                decide(e, "zaakceptowane" if new_code == orig else "poprawione", comment, new_code)
+                expert.decide_event(con, e["id"], "accept", new_code, comment)
+                st.rerun()
             if c2.button("✖ Odrzuć", key=f"no{e['id']}", width="stretch"):
-                decide(e, "odrzucone", comment, None)
+                expert.decide_event(con, e["id"], "reject", comment=comment)
+                st.rerun()
             hist = q("SELECT * FROM expert_decision WHERE target='event' AND target_id=? ORDER BY id", (e["id"],))
             if hist:
                 st.caption("Historia: " + " · ".join(f"{h['created_at'][:16]} {h['decision']} {h['new_value'] or ''} "
@@ -363,18 +332,6 @@ def view_risks():
     with st.expander("Katalog ryzyk R01–R15"):
         st.dataframe(pd.DataFrame(risks.CATALOG, columns=["Kod", "Ryzyko", "Efekty"]), hide_index=True,
                      width="stretch")
-
-
-def decide(e, decision, comment, new_code):
-    new_title = f"{new_code} {risks.NAMES[new_code]}" if new_code else None
-    old = e.get("expert_title") or e["title"]
-    con.execute("INSERT INTO expert_decision(target,target_id,decision,comment,old_value,new_value,author,created_at) "
-                "VALUES ('event',?,?,?,?,?,?,?)", (e["id"], decision, comment, old, new_title, "ekspert", db.now()))
-    # tytuł propozycji zostaje (klucz przy ponownym pobraniu); decyzja w expert_title
-    con.execute("UPDATE event SET status=?, expert_title=?, expert_comment=? WHERE id=?",
-                (decision, new_title, comment, e["id"]))
-    con.commit()
-    st.rerun()
 
 
 # ============================================================================ NOWY PROJEKT
