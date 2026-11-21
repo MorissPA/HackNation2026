@@ -4,6 +4,7 @@ Uruchomienie samodzielne:  .venv/bin/uvicorn api:app --port 8000
 Razem z frontendem:        cd web && npm run dev
 """
 import json
+import os
 import threading
 import uuid
 from pathlib import Path
@@ -15,8 +16,25 @@ from pydantic import BaseModel
 from riskminer import analysis, db, expert, importer, llm, matcher, pipeline, risks
 from riskminer.bzp.client import BZPClient
 
-SAMPLE = Path(__file__).resolve().parent.parent / "Risk_Miner_dane_projekty.xlsx"
+# Arkusz organizatora: domyślnie katalog wyżej (paczka „materialy_dla_uczestnikow”), w kontenerze montowany
+# do pliku wskazanego przez RISKMINER_SAMPLE_XLSX.
+SAMPLE = Path(os.environ.get("RISKMINER_SAMPLE_XLSX",
+                             Path(__file__).resolve().parent.parent / "Risk_Miner_dane_projekty.xlsx"))
 app = FastAPI(title="Risk Miner API", version="0.1")
+
+
+@app.on_event("startup")
+def autoimport():
+    """RISKMINER_AUTOIMPORT=1: przy pustej bazie importuj arkusz organizatora (świeża instalacja)."""
+    if os.environ.get("RISKMINER_AUTOIMPORT") != "1" or not SAMPLE.is_file():
+        return
+    con = db.connect()
+    try:
+        if not con.execute("SELECT count(*) FROM project").fetchone()[0]:
+            rep = importer.import_file(con, SAMPLE.name, SAMPLE.read_bytes())
+            print(f"Risk Miner: zaimportowano {SAMPLE.name}: {rep['counts']}", flush=True)
+    finally:
+        con.close()
 
 
 def get_con():

@@ -20,6 +20,8 @@ def main():
     f = sub.add_parser("fetch"); f.add_argument("ids", nargs="*"); f.add_argument("--all", action="store_true")
     f.add_argument("--offline", action="store_true")
     s = sub.add_parser("show"); s.add_argument("id")
+    rp = sub.add_parser("report", help="Raport z testu: jakość połączeń i analiza nowego projektu (docs/)")
+    rp.add_argument("--out", default="docs")
     model = sub.add_parser("llm", help="Przeanalizuj przyczyny i ryzyka w dowodach projektu")
     model.add_argument("id")
     args = ap.parse_args()
@@ -40,6 +42,13 @@ def main():
             print(f"==> {pid}: {res['status']} – {res['message']} | faktów {res['facts']}, zdarzeń {res['events']}")
         print("Zapytań sieciowych:", client.n_network_calls,
               "| źródła:", ", ".join(sorted(client.sources_used)) or "tylko cache")
+    elif args.cmd == "report":
+        from riskminer import report
+        rep = report.build(con)
+        out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
+        (out / "raport_z_testu.md").write_text(report.to_markdown(rep), encoding="utf-8")
+        (out / "raport_polaczen.csv").write_text(report.to_csv(rep), encoding="utf-8")
+        print("Połączenia:", rep["counts"], "| zapisano:", out / "raport_z_testu.md", "i", out / "raport_polaczen.csv")
     elif args.cmd == "llm":
         try:
             print(llm.analyze_project(con, args.id))

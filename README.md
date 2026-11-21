@@ -2,7 +2,33 @@
 
 Aplikacja dla eksperta inwestycji wodno-ściekowych. Importuje arkusz projektów i automatycznie pobiera dane z Biuletynu Zamówień Publicznych (BZP). Z tych danych buduje kartę przypadku: postępowanie, umowy, zmiany, oś czasu, fakty z dowodem, obliczenia, propozycje ryzyk R01–R15 i braki danych.
 
-## Uruchomienie
+## Uruchomienie w kontenerze (wariant demonstracyjny)
+
+Wymagania: Docker z Compose (np. Docker Desktop). Z katalogu `risk_miner/`, gdy katalog wyżej leży paczka organizatora z plikiem `Risk_Miner_dane_projekty.xlsx`:
+
+```bash
+docker compose up -d --build
+```
+
+Aplikacja działa na **http://localhost:8000** (jeden port: interfejs i API).
+
+- **Dane:** wolumen `riskminer-data` (`/data` w kontenerze) trzyma bazę SQLite, cache BZP/BIP i model GGUF. Przetrwa `docker compose restart` oraz `down` i `up`. Wyczyścić go można przez `docker compose down -v`.
+- **Arkusz organizatora:** montowany tylko do odczytu jako `/import/Risk_Miner_dane_projekty.xlsx`. Przy pustej bazie importuje się automatycznie przy starcie (`RISKMINER_AUTOIMPORT=1`). Inne położenie pliku: `RISKMINER_XLSX=/ścieżka/do/pliku.xlsx docker compose up -d`. Bez pliku arkusz można wgrać w interfejsie przyciskiem „Wgraj XLSX / CSV”.
+- **Model Qwen** (~1,12 GB, sprawdzany SHA-256) pobiera się do wolumenu przy pierwszej analizie LLM. Kolejne starty korzystają z pobranego pliku.
+- **Inny port:** `RISKMINER_PORT=9000 docker compose up -d`.
+- **macOS:** paczka organizatora leży zwykle w folderze Pobrane. Przy pierwszym starcie macOS pyta, czy Docker może uzyskać dostęp do tego folderu. Bez zgody kontener zatrzymuje się w stanie „Created”. Zgodę można też włączyć w Ustawienia systemowe → Prywatność i ochrona → Pliki i foldery → Docker.
+- **Pierwsza budowa** obrazu trwa ok. 20 minut, bo `llama-cpp-python` kompiluje się ze źródeł. Obraz waży ok. 1,1 GB, a kolejne budowy korzystają z cache.
+
+Test wdrożenia (Docker Desktop 29.9, arm64), wszystko ✅:
+
+| Krok | Wynik |
+|---|---|
+| start z pustym wolumenem | autoimport 22 projektów, healthcheck „healthy” |
+| Steklin (RM-2026-003) | 5 ogłoszeń, +40,3% wypłaty, 277 dni opóźnienia – jak lokalnie |
+| analiza LLM | model pobrany do wolumenu i sprawdzony (5,5 min), 3 propozycje: R07 ×2, R04 |
+| `docker compose restart` oraz `down` + `up` | dane, propozycje i model zachowane; brak ponownego importu; ponowna analiza z zapisanych wyników w 0,01 s |
+
+## Uruchomienie lokalne (praca nad kodem)
 
 Wymagania: Python 3.9+ i Node.js 18+.
 
@@ -156,6 +182,23 @@ Wynik dla Modlikowic:
 5. **Eksport** do CSV (separator `;`, z BOM dla Excela) i JSON.
 
 Ogłoszenie o wykonaniu umowy, które podaje „wykonana należycie: Nie” albo wypłatę poniżej 90% wartości umowy, daje zdarzenie typu `sygnał` i propozycję R12 do oceny eksperta.
+
+## Raport z testu
+
+```bash
+.venv/bin/python cli.py report        # zapisuje docs/raport_z_testu.md i docs/raport_polaczen.csv
+```
+
+Raport sprawdza każde połączenie rekordu z arkusza z postępowaniem w BZP na danych podmiotu i zamówienia:
+- NIP zamawiającego z arkusza = NIP w ogłoszeniach,
+- numer BZP z arkusza jest wśród ogłoszeń postępowania,
+- tytuł zamówienia zawiera słowa nazwy przedsięwzięcia,
+- dla rekordów „część N” przypisana jest umowa właściwej części,
+- jest ogłoszenie o wykonaniu umowy.
+
+Wynik: *poprawne*, *niepewne* (wymaga oceny eksperta) albo *błędne*. Uwagi o jakości danych są w osobnej kolumnie. Raport zawiera też wyniki analizy dwóch przykładowych nowych inwestycji.
+
+Stan na paczce organizatora: 15 połączeń poprawnych, 7 niepewnych (6 propozycji KPO czekających na eksperta i Wolin, którego ogłoszenia nie zwraca API BZP), 0 błędnych.
 
 ## Model danych
 

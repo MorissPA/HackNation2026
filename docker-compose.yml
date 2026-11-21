@@ -1,0 +1,19 @@
+# Uruchomienie jednym poleceniem:   docker compose up -d --build
+# Aplikacja: http://localhost:8000 (inny port: RISKMINER_PORT=9000 docker compose up -d)
+services:
+  riskminer:
+    build: .
+    image: riskminer:latest
+    ports:
+      - "${RISKMINER_PORT:-8000}:8000"
+    volumes:
+      # SQLite, cache BZP/BIP i model GGUF (~1,1 GB, pobierany przy pierwszej analizie LLM) – przetrwają restart
+      - riskminer-data:/data
+      # Arkusz organizatora z paczki „materialy_dla_uczestnikow” (katalog wyżej); tylko do odczytu
+      - ${RISKMINER_XLSX:-../Risk_Miner_dane_projekty.xlsx}:/import/Risk_Miner_dane_projekty.xlsx:ro
+    environment:
+      RISKMINER_AUTOIMPORT: "1"   # przy pustej bazie zaimportuj arkusz przy starcie
+    restart: unless-stopped
+
+volumes:
+  riskminer-data:
