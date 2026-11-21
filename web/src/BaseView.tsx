@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, type Card, type Row } from "./api";
+import { ProjectsMap } from "./ProjectsMap";
 import { LinkChip, Spinner, download, mln, num, pln, useToast } from "./ui";
 
 function Drawer({ pid, project, onClose }: { pid: string | null; project: Row | undefined; onClose: () => void }) {
@@ -90,13 +91,19 @@ export function BaseView({ selected, onSelect, refreshKey }: { selected: string 
   const [q, setQ] = useState("");
   const [sub, setSub] = useState("ALL");
   const [st, setSt] = useState("ALL");
+  const [gmina, setGmina] = useState("ALL");
+  const [viewMode, setViewMode] = useState<"split" | "table" | "map">("split");
   useEffect(() => { api.projects().then(setProjects).catch((e) => toast(e.message, true)); }, [refreshKey, toast]);
   const subsectors = useMemo(() => [...new Set((projects ?? []).map((p) => p.subsector))].sort(), [projects]);
+  const gminas = useMemo(() => [...new Set((projects ?? []).map((p) => p.gmina || p.city).filter(Boolean))].sort(), [projects]);
   const shown = useMemo(() => (projects ?? []).filter((p) => {
     const t = q.toLowerCase();
-    return (!t || `${p.project_id} ${p.name} ${p.recipient_name} ${p.public_id}`.toLowerCase().includes(t))
-      && (sub === "ALL" || p.subsector === sub) && (st === "ALL" || p.review_status === st);
-  }), [projects, q, sub, st]);
+    const gName = p.gmina || p.city;
+    return (!t || `${p.project_id} ${p.name} ${p.recipient_name} ${p.public_id} ${p.city ?? ""}`.toLowerCase().includes(t))
+      && (sub === "ALL" || p.subsector === sub)
+      && (st === "ALL" || p.review_status === st)
+      && (gmina === "ALL" || gName === gmina || p.city === gmina);
+  }), [projects, q, sub, st, gmina]);
   const close = useMemo(() => () => onSelect(null), [onSelect]);
 
   const exportView = () => {
@@ -126,6 +133,24 @@ export function BaseView({ selected, onSelect, refreshKey }: { selected: string 
           <div className="filter-body">
             <div><label className="lbl" htmlFor="f-q">Szukaj</label>
               <input id="f-q" type="text" className="field" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Gmina, nazwa zadania lub numer BZP…" /></div>
+            <div><label className="lbl" htmlFor="f-gmina">Gmina ({gminas.length})</label>
+              <select id="f-gmina" className="field" value={gmina} onChange={(e) => setGmina(e.target.value)}>
+                <option value="ALL">Wszystkie gminy ({gminas.length})</option>
+                {gminas.map((g) => <option key={g} value={g}>{g}</option>)}
+              </select></div>
+            {gmina !== "ALL" ? (
+              <div style={{ marginTop: "4px" }}>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  style={{ width: "100%", justifyContent: "space-between", borderColor: "var(--accent)" }}
+                  onClick={() => setGmina("ALL")}
+                >
+                  <span>Filtrowanie: <b>{gmina}</b></span>
+                  <span>✕</span>
+                </button>
+              </div>
+            ) : null}
             <div><label className="lbl" htmlFor="f-sub">Podsektor</label>
               <select id="f-sub" className="field" value={sub} onChange={(e) => setSub(e.target.value)}>
                 <option value="ALL">Wszystkie podsektory</option>
@@ -141,28 +166,73 @@ export function BaseView({ selected, onSelect, refreshKey }: { selected: string 
           </div>
         </aside>
         <div className="panel flush">
-          <div className="tbl-toolbar">
+          <div className="tbl-toolbar" style={{ flexWrap: "wrap", gap: "10px" }}>
             <span>Wyniki: <strong>{shown.length}</strong> z {projects?.length ?? 0} projektów</span>
-            <span>Kliknij wiersz, aby otworzyć kartę szczegółów</span>
+            {gmina !== "ALL" ? (
+              <span className="user-chip" style={{ cursor: "pointer" }} onClick={() => setGmina("ALL")}>
+                Gmina: {gmina} ✕
+              </span>
+            ) : null}
+            <div className="util-group" style={{ marginLeft: "auto" }}>
+              <button
+                type="button"
+                className={`util-btn ${viewMode === "split" ? "on" : ""}`}
+                onClick={() => setViewMode("split")}
+                title="Pokaż mapę i tabelę"
+              >
+                🗺️ Podzielony
+              </button>
+              <button
+                type="button"
+                className={`util-btn ${viewMode === "map" ? "on" : ""}`}
+                onClick={() => setViewMode("map")}
+                title="Tylko mapa"
+              >
+                Tylko mapa
+              </button>
+              <button
+                type="button"
+                className={`util-btn ${viewMode === "table" ? "on" : ""}`}
+                onClick={() => setViewMode("table")}
+                title="Tylko tabela"
+              >
+                Tylko tabela
+              </button>
+            </div>
           </div>
-          <div className="scroll-x">
-            <table className="tbl">
-              <thead><tr><th style={{ width: 130 }}>ID</th><th>Gmina / nazwa projektu</th><th>Podsektor</th><th className="num">Kwota umów (brutto)</th><th className="num">Status</th></tr></thead>
-              <tbody className="click">
-                {projects === null ? <tr><td colSpan={5}><Spinner /></td></tr> : shown.length ? shown.map((p) => (
-                  <tr key={p.project_id} className={selected === p.project_id ? "sel" : ""} tabIndex={0}
-                    onClick={() => onSelect(p.project_id)} onKeyDown={(e) => { if (e.key === "Enter") onSelect(p.project_id); }}>
-                    <td><span className="id-badge">{p.project_id}</span></td>
-                    <td><div className="t-main">{p.recipient_name}</div><div className="t-sub">{p.name}</div></td>
-                    <td>{p.subsector}</td>
-                    <td className="num t-main">{p.contract_value != null ? pln(p.contract_value) : <span className="t-sub">brak umowy</span>}</td>
-                    <td className="num"><span className={p.review_status === "Zatwierdzony" ? "status-appr" : "status-pend"}>{p.review_status}</span>
-                      {p.n_open ? <div className="t-sub">{p.n_open} do oceny</div> : null}</td>
-                  </tr>)) : <tr><td colSpan={5} style={{ textAlign: "center", padding: 32 }} className="t-sub">
-                    {projects.length ? "Brak projektów pasujących do filtrów." : "Baza jest pusta – zaimportuj arkusz w zakładce „Dane i reguły”."}</td></tr>}
-              </tbody>
-            </table>
-          </div>
+
+          {viewMode !== "table" && (
+            <div style={{ padding: "16px 16px 8px 16px" }}>
+              <ProjectsMap
+                projects={shown}
+                selectedGmina={gmina}
+                onSelectGmina={setGmina}
+                onSelectProject={onSelect}
+                selectedPid={selected}
+              />
+            </div>
+          )}
+
+          {viewMode !== "map" && (
+            <div className="scroll-x">
+              <table className="tbl">
+                <thead><tr><th style={{ width: 130 }}>ID</th><th>Gmina / nazwa projektu</th><th>Podsektor</th><th className="num">Kwota umów (brutto)</th><th className="num">Status</th></tr></thead>
+                <tbody className="click">
+                  {projects === null ? <tr><td colSpan={5}><Spinner /></td></tr> : shown.length ? shown.map((p) => (
+                    <tr key={p.project_id} className={selected === p.project_id ? "sel" : ""} tabIndex={0}
+                      onClick={() => onSelect(p.project_id)} onKeyDown={(e) => { if (e.key === "Enter") onSelect(p.project_id); }}>
+                      <td><span className="id-badge">{p.project_id}</span></td>
+                      <td><div className="t-main">{p.recipient_name}</div><div className="t-sub">{p.name}</div></td>
+                      <td>{p.subsector}</td>
+                      <td className="num t-main">{p.contract_value != null ? pln(p.contract_value) : <span className="t-sub">brak umowy</span>}</td>
+                      <td className="num"><span className={p.review_status === "Zatwierdzony" ? "status-appr" : "status-pend"}>{p.review_status}</span>
+                        {p.n_open ? <div className="t-sub">{p.n_open} do oceny</div> : null}</td>
+                    </tr>)) : <tr><td colSpan={5} style={{ textAlign: "center", padding: 32 }} className="t-sub">
+                      {projects.length ? "Brak projektów pasujących do filtrów." : "Baza jest pusta – zaimportuj arkusz w zakładce „Dane i reguły”."}</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          )}
           <div className="tbl-footer">
             <span>Źródło: Biuletyn Zamówień Publicznych (e-Zamówienia), arkusz projektów organizatora</span>
             <span>Wartości umów w PLN brutto</span>

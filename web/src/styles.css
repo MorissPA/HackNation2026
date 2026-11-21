@@ -309,3 +309,10 @@ body.hc .chip, body.hc .st-miss, body.hc .st-ok, body.hc .status-appr, body.hc .
   .panel, .risk { padding: 16px; }
 }
 @media (prefers-reduced-motion: reduce) { .spin, .toast { animation: none; } .bar > div, .drawer { transition: none; } }
+
+/* ---------- mapa inwestycji Leaflet ---------- */
+.map-wrapper { width: 100%; position: relative; }
+.custom-gmina-pin { display: flex; align-items: center; justify-content: center; }
+.leaflet-popup-content-wrapper { border-radius: var(--radius); box-shadow: 0 4px 12px rgba(16, 32, 56, 0.15); border: 1px solid var(--line); padding: 2px; }
+.leaflet-popup-content { margin: 12px 14px; font-family: inherit; }
+.leaflet-container { font-family: inherit; }
