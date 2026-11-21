@@ -502,12 +502,14 @@ def run_analysis(req: AnalysisRequest, con=Depends(get_con)):
 @app.post("/api/analysis/file")
 async def run_analysis_file(file: UploadFile = File(...), con=Depends(get_con)):
     try:
-        text = analysis.text_from_file(file.filename, await file.read())
+        text, ocr_pages = analysis.read_file(file.filename, await file.read())
     except ValueError as e:
         raise HTTPException(400, str(e))
     except Exception as e:  # uszkodzony plik
         raise HTTPException(400, f"Nie udało się odczytać pliku: {e}")
-    return _analyze(con, text)
+    result = _analyze(con, text)
+    result["ocr_pages"] = ocr_pages
+    return result
 
 
 @app.post("/api/analysis/export")

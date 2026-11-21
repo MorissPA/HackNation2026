@@ -23,6 +23,8 @@ def _value(f, key):
         return (f["scale"].get(key) or {}).get("value")
     if key == "extra_cost":
         return [o["value"] for o in f.get("extra_costs", [])]
+    if key == "deadline_date":
+        return (f.get("deadline_change") or {}).get("new_date")
     if key == "deadline_days":
         return (f.get("deadline_change") or {}).get("days")
     return (f.get(key) or {}).get("value")
@@ -45,7 +47,7 @@ def score_field(f, key, spec):
 
 
 def score(f, doc):
-    fields = {k: score_field(f, k, v) for k, v in doc.items() if k not in ("plik", "ograniczenia")}
+    fields = {k: score_field(f, k, v) for k, v in doc.items() if k not in ("plik", "ograniczenia") and not k.startswith("_")}
     found = {c["value"] for c in f["constraints"]}
     want = doc.get("ograniczenia", [])
     return fields, [c for c in want if c in found], [c for c in want if c not in found]

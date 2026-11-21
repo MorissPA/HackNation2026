@@ -187,7 +187,7 @@ Przy pobieraniu projektu, którego zamawiający ma skonfigurowany BIP:
 2. Czytamy dwa rodzaje dokumentów:
    - załączniki z numerem projektu, postępowania lub nazwą wykonawcy w tytule oraz te, których tytuł wymienia miejscowość i zakres projektu lub zależny obiekt,
    - 4 najnowsze plany finansowe (WPF, plan postępowań).
-   PDF czytamy strona po stronie, a do tego DOCX i ODT. Skany bez warstwy tekstowej i pliki `.doc` zostają z tytułem i datą jako dowodem i trafiają do braków.
+   PDF czytamy strona po stronie, a do tego DOCX i ODT. Skany bez warstwy tekstowej czytamy przez OCR (status dokumentu `ocr`), gdy jest zainstalowany Tesseract; bez niego oraz pliki `.doc` zostają z tytułem i datą jako dowodem i trafiają do braków.
 3. Powiązanie z projektem ma cytat i numer strony:
    - **przedsięwzięcie**: miejscowość i zakres projektu (np. kanalizacja w Modlikowicach),
    - **powiązana inwestycja**: miejscowość i obiekt, od którego projekt zależy według opisu KPO (np. oczyszczalnia, do której wpięta będzie sieć).
@@ -202,7 +202,7 @@ Wynik dla Modlikowic:
 
 ## Analiza nowego projektu
 
-1. **Cechy z opisu** (tekst albo PDF z warstwą tekstową / DOCX). Każda cecha ma fragment źródłowy:
+1. **Cechy z opisu** (tekst, PDF, DOCX, skan PDF albo zdjęcie dokumentu – OCR). Każda cecha ma fragment źródłowy:
    - podsektor główny i dodatkowe (taksonomia organizatora),
    - rodzaj prac, formuła realizacji,
    - skala (km, RLM, m³/d, przyłącza), budżet, termin,
@@ -236,6 +236,16 @@ Wynik dla Modlikowic:
 5. **Eksport** do CSV (separator `;`, z BOM dla Excela) i JSON.
 
 Ogłoszenie o wykonaniu umowy, które podaje „wykonana należycie: Nie” albo wypłatę poniżej 90% wartości umowy, daje zdarzenie typu `sygnał` i propozycję R12 do oceny eksperta.
+
+### OCR skanów
+
+Skany PDF (strony jako obrazy) i zdjęcia dokumentów (PNG, JPG, TIFF) czytamy lokalnie Tesseractem z polskim modelem (`riskminer/ocr.py`). Dokument nie opuszcza komputera. PDF mieszany (część stron tekstowa, część wklejona jako obraz) – OCR tylko stron-obrazów. Małe skany są powiększane do ~300 dpi.
+
+```bash
+brew install tesseract tesseract-lang   # macOS
+```
+
+W Dockerze `tesseract-ocr` i `tesseract-ocr-pol` instalują się przy budowie obrazu. Bez Tesseracta skan daje komunikat z instrukcją instalacji. Test: pismo z Grodziska (skan) jest w zbiorze `docs/ekstrakcja/` jako tekst z OCR – rozpoznany podsektor, nowy termin 31.12.2025 i dwie okoliczności ryzyka.
 
 ## Eksport bazy przypadków
 
@@ -281,7 +291,7 @@ Tabele: `project`, `procedure` (OCID), `project_link` (z metodą dopasowania, do
 
 - Pole „Wartość zmiany” w ogłoszeniu o wykonaniu bywa wypełniane **nową wartością umowy** zamiast różnicy (np. Zakrzew, część 1 i 2). Aplikacja oznacza to jako brak/niepewność, a wzrost kosztu liczy z „Łącznej wartości wynagrodzenia wypłaconej”.
 - Wartość szacunkowa w BZP jest netto, a wartość umowy zwykle brutto. Porównanie ceny z szacunkiem ma przy formule zastrzeżenie o VAT.
-- BIP jest skonfigurowany na razie dla jednej gminy (Zagrodno). Skany wymagają OCR, którego nie mamy, więc dla nich dowodem jest tytuł i data publikacji.
+- BIP jest skonfigurowany na razie dla jednej gminy (Zagrodno). Skany czytamy przez OCR (Tesseract); rozpoznanie może mylić cyfry, dlatego interfejs prosi o sprawdzenie kwot i dat ze skanem.
 - Kilka ogłoszeń o wykonaniu tej samej umowy (korekty, np. Modlikowice) traktujemy tak: obowiązuje najnowsze, a różnice w kluczowych polach pokazujemy w brakach.
 - Link „Otwórz w BZP” używa `moIdentifier`. Format adresu karty w serwisie BZP trzeba jeszcze potwierdzić ręcznie. Pełna treść ogłoszenia jest zawsze dostępna w zakładce „Źródła”.
 - Propozycje regułowe powstają podczas pobierania. Propozycje LLM uruchamia użytkownik na karcie lub z CLI.

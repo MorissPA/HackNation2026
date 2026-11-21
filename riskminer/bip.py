@@ -4,7 +4,7 @@ Konfiguracja: bip_sources.json (NIP zamawiającego -> adres BIP). Dla projektu:
 1. przegląd sekcji BIP (z cache) i lista załączników: tytuł, sekcja, data publikacji,
 2. wybór dokumentów: tytuł wspomina miejscowość projektu albo dokument jest planem finansowym
    (WPF, plan postępowań) – takie czytamy w całości,
-3. odczyt treści (PDF strona po stronie, DOCX, ODT); skany i stare .doc zostają z tytułem i datą jako dowodem,
+3. odczyt treści (PDF strona po stronie, DOCX, ODT, skany przez OCR gdy jest Tesseract); stare .doc zostają z tytułem i datą jako dowodem,
 4. powiązanie z projektem: miejscowość + zakres projektu („przedsięwzięcie”) albo miejscowość + obiekt,
    od którego projekt zależy według opisu KPO („powiązana inwestycja”, np. oczyszczalnia, do której
    wpięta będzie sieć). Każde powiązanie ma cytat i stronę.
@@ -115,16 +115,24 @@ class DBip:
     def document(self, att):
         """Treść dokumentu (cache bez TTL – opublikowany plik się nie zmienia)."""
         row = self.con.execute("SELECT * FROM document WHERE url=?", (att["url"],)).fetchone()
-        if row and row["status"] != "błąd":
+        from . import ocr
+        # skan zapamiętany bez OCR – odczytujemy ponownie, gdy OCR jest już zainstalowany
+        if row and row["status"] != "błąd" and not (row["status"] == "skan" and ocr.available()):
             return dict(row)
         pages, status = [], "ok"
         try:
             content = self._get(att["url"], binary=True)
             if att["ext"] == "pdf":
                 from pypdf import PdfReader
-                pages = [p.extract_text() or "" for p in PdfReader(io.BytesIO(content)).pages]
+                reader = PdfReader(io.BytesIO(content))
+                pages = [p.extract_text() or "" for p in reader.pages]
                 if not any(p.strip() for p in pages):
                     status, pages = "skan", []
+                    if ocr.available():  # skan – tekst z OCR (oznaczony statusem „ocr”: możliwe błędy rozpoznania)
+                        try:
+                            pages, status = [ocr.pdf_to_text(reader)], "ocr"
+                        except ocr.OCRError as e:
+                            self.log(f"BIP OCR: {att['url']}: {e}")
             elif att["ext"] in ("docx", "odt"):
                 z = zipfile.ZipFile(io.BytesIO(content))
                 xml = z.read("word/document.xml" if att["ext"] == "docx" else "content.xml").decode("utf-8", "replace")

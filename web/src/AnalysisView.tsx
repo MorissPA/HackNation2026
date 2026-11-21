@@ -133,7 +133,12 @@ export function AnalysisView({ minChars }: { minChars?: number }) {
 
   const run = async (fn: () => Promise<Row>) => {
     setBusy(true);
-    try { const r = await fn(); setResult(r); setText(r.input_text); setSub("risks"); }
+    try {
+      const r = await fn();
+      // ponowne przeliczenie (wybór eksperta, model) idzie z tekstu – zachowujemy informację o OCR
+      setResult((prev) => (r.ocr_pages == null && prev?.input_text === r.input_text ? { ...r, ocr_pages: prev?.ocr_pages } : r));
+      setText(r.input_text); setSub("risks");
+    }
     catch (e) { toast((e as Error).message, true); } finally { setBusy(false); }
   };
   const exp = async (format: "csv" | "json") => {
@@ -159,7 +164,7 @@ export function AnalysisView({ minChars }: { minChars?: number }) {
       <div className="page-head">
         <div>
           <h1>Ocena ryzyk nowej inwestycji</h1>
-          <p>Opisz planowane zadanie lub załącz koncepcję (PDF z warstwą tekstową, DOCX). System porówna je z historycznymi umowami wod-kan z BZP i pokaże, na czym opiera każdy wniosek.</p>
+          <p>Opisz planowane zadanie lub załącz koncepcję (PDF – także skan, DOCX, zdjęcie dokumentu). System porówna je z historycznymi umowami wod-kan z BZP i pokaże, na czym opiera każdy wniosek.</p>
         </div>
       </div>
       <div className="panel">
@@ -173,8 +178,8 @@ export function AnalysisView({ minChars }: { minChars?: number }) {
         </div>
         <div className="input-foot">
           <label className="attach">
-            <span>{file ? `Załączono: ${file}` : "Załącz plik PDF / DOCX (np. PFU, koncepcja)"}</span>
-            <input type="file" accept=".pdf,.docx,.txt" disabled={busy}
+            <span>{file ? `Załączono: ${file}` : "Załącz plik PDF / DOCX / skan (np. PFU, koncepcja)"}</span>
+            <input type="file" accept=".pdf,.docx,.txt,.png,.jpg,.jpeg,.tif,.tiff" disabled={busy}
               onChange={(e) => { const fl = e.target.files?.[0]; if (fl) { setFile(fl.name); run(() => api.analyzeFile(fl)); } e.target.value = ""; }} />
           </label>
           <span className="row">
@@ -198,6 +203,8 @@ export function AnalysisView({ minChars }: { minChars?: number }) {
                 <button className="btn btn-sm" onClick={() => exp("csv")}>Eksportuj CSV</button>
               </span>
             </div>
+            {result.ocr_pages ? <p className="caption">Tekst odczytany przez OCR ze skanu (stron: {result.ocr_pages}).
+              Sprawdź liczby (kwoty, daty) z dokumentem – rozpoznanie może mylić cyfry.</p> : null}
             {result.llm?.error ? <div className="gap"><p>Model językowy niedostępny: {result.llm.error} Wynik oparty tylko na regułach.</p></div> : null}
             {usedLlm ? <p className="caption">Szczegóły doczytał model {result.llm.model}{result.llm.cached ? " (wynik zapamiętany)" : ` w ${result.llm.seconds} s`}.
               Wartości oznaczone „model” mają cytat sprawdzony w dokumencie{result.llm.rejected ? `; odrzucono ${result.llm.rejected} odpowiedzi bez pokrycia w tekście` : ""}.

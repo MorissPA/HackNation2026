@@ -29,7 +29,11 @@ SUBSECTORS = [
 CONSTRAINTS = [
     ("pozwolenie wodnoprawne / odbiornik ścieków", r"pozwoleni\w* wodnoprawn|odbiornik\w*\s+ściek\w*|wylot\w* (ścieków|do)|zrzut\w*|wody polskie|\b(?:jezior|rzek|ciek|potok)\w*\b"),
     ("decyzja środowiskowa / ochrona przyrody", r"decyzj\w* (o )?środowiskow|natura 2000|obszar\w* chronion|ochron\w* przyrody|RDOŚ"),
-    ("grunty prywatne / dostęp do terenu", r"grunt\w* prywatn|własnoś\w* prywatn|służebnoś|wejści\w* w teren|zgod\w* właściciel|prawo do dysponowania"),
+    ("grunty prywatne / dostęp do terenu", r"grunt\w* prywatn|własnoś\w* prywatn|służebnoś|wejści\w* w teren|zgod\w* właściciel|prawo do dysponowania"
+     r"|uzgodnie\w* z mieszkańc|modyfikowani\w* tras|zmian\w* tras"),
+    ("nieaktualna dokumentacja projektowa",
+     r"projekt\w*[^.]{0,40}sporządzon\w*[^.]{0,20}(?:kilkanaście|kilka|wiele|\d+)\s+lat|nieaktualn\w* (?:projekt|dokumentacj|kosztorys|map)"
+     r"|map\w* zasadnicz\w* z (?:19|200)\d\d|kosztorys\w*[^.]{0,30}z (?:19|20)[012]\d"),
     ("kolizje i istniejące uzbrojenie", r"kolizj|istniejąc\w* (uzbrojeni|sieci|infrastruktur)|uzbrojeni\w* teren"),
     ("przekroczenia: droga, kolej, ciek", r"przejści\w* (pod|przez)|przewiert|przecisk|drog\w* (krajow|wojewódzk|powiatow)|lini\w* kolejow|kolej"),
     ("istniejący obiekt w eksploatacji", r"ciągłoś\w* pracy|istniejąc\w* oczyszczal|w trakcie eksploatacji|bez przerw\w* w dostawie|rozbiórk\w* istniejąc"),
@@ -85,6 +89,7 @@ ACTIONS = {
 # Okoliczności, które rozpoznaje model językowy (trudne do uchwycenia regułą) → ryzyko z katalogu.
 MODEL_CONSTRAINTS = {
     "niepełny lub niespójny zakres": "R01",
+    "nieaktualna dokumentacja projektowa": "R01",
     "nieustalony operator / podział odpowiedzialności": "R05",
     "nierealny harmonogram / zależność od innej inwestycji": "R06",
     "wynagrodzenie ryczałtowe przy niepewnym zakresie": "R08",
@@ -148,11 +153,29 @@ def _broken_pdf_text(text: str) -> bool:
 
 
 def text_from_file(filename: str, content: bytes) -> str:
+    return read_file(filename, content)[0]
+
+
+def read_file(filename: str, content: bytes):
+    """Tekst z pliku i liczba stron/obrazów odczytanych przez OCR (0 = warstwa tekstowa)."""
+    from . import ocr
     name = filename.lower()
+    if name.endswith(ocr.IMAGE_TYPES):
+        return clean_pdf_text(ocr.file_to_text(content)), 1
     if name.endswith(".pdf"):
         from pypdf import PdfReader
         reader = PdfReader(io.BytesIO(content))
-        text = "\n".join((page.extract_text() or "") for page in reader.pages)
+        texts = [page.extract_text() or "" for page in reader.pages]
+        scanned = [i for i, t in enumerate(texts) if len(t.strip()) < 20 and reader.pages[i].images]
+        if scanned and (ocr.available() or len(scanned) == len(texts)):
+            # skan (cały albo strony wklejone jako obraz) – OCR tylko tych stron
+            if len(scanned) == len(texts):
+                return clean_pdf_text(ocr.pdf_to_text(reader)), len(scanned)
+            for i in scanned[:ocr.MAX_PAGES]:
+                best = max(reader.pages[i].images, key=lambda im: im.image.width * im.image.height if im.image else 0)
+                texts[i] = ocr.image_to_text(best.image)
+            return clean_pdf_text("\n".join(texts)), len(scanned)
+        text = "\n".join(texts)
         if _broken_pdf_text(text):
             # PDF z Google Docs / Worda: pypdf zwraca jedno słowo na wiersz („URZĄD\n \nGMINY”) – tryb układu
             # odtwarza wiersze; wielokrotne spacje (wyrównanie kolumn) zastępujemy jedną.
@@ -161,8 +184,8 @@ def text_from_file(filename: str, content: bytes) -> str:
             text = "\n".join(line.strip() for line in text.split("\n"))
         text = clean_pdf_text(text)
         if not text.strip():
-            raise ValueError("PDF nie ma warstwy tekstowej (skan) – OCR nie jest obsługiwany. Wklej opis jako tekst.")
-        return text
+            raise ValueError("PDF nie ma warstwy tekstowej ani obrazów stron do OCR. Wklej opis jako tekst.")
+        return text, 0
     if name.endswith(".docx"):
         xml = zipfile.ZipFile(io.BytesIO(content)).read("word/document.xml").decode("utf-8")
         paras = []
@@ -171,10 +194,10 @@ def text_from_file(filename: str, content: bytes) -> str:
             t = html.unescape("".join(re.findall(r"<w:t(?:\s[^>]*)?>([^<]*)</w:t>", p)))
             if t.strip():
                 paras.append(t)
-        return "\n".join(paras)
+        return "\n".join(paras), 0
     if name.endswith(".txt"):
-        return content.decode("utf-8", errors="replace")
-    raise ValueError("Obsługiwane formaty: PDF z warstwą tekstową, DOCX, TXT")
+        return content.decode("utf-8", errors="replace"), 0
+    raise ValueError("Obsługiwane formaty: PDF (także skan – OCR), DOCX, TXT, zdjęcie dokumentu (PNG, JPG, TIFF)")
 
 
 # ================================================================ cechy
@@ -353,7 +376,12 @@ def _deadline_change(text):
     if not (old and new):
         m = re.search(r"(?:przedłuż|wydłuż)\w*\s+termin\w*[^.]{0,80}?\bo\s+(?:okres\s+)?(\d+)\s*(miesi\w*|dni|tygodni\w*)", text, re.I)
         if not m:
-            return None
+            # „wnioskuje o wydłużenie terminu realizacji projektu … do 31.12.2025 r.” – nowy termin bez starego
+            m = re.search(r"(?:przedłuż|wydłuż)\w*\s+termin\w*[^.]{0,250}?\bdo\s+(\d{1,2}[./]\d{1,2}[./]\d{4})", text, re.I | re.S)
+            if not m:
+                return None
+            return {"value": f"wydłużenie terminu do {m.group(1)}", "days": None, "new_date": m.group(1),
+                    "source": _snip(text, m, 20)}
         n, unit = int(m.group(1)), m.group(2).lower()
         days = n * (30 if unit.startswith("miesi") else 7 if unit.startswith("tyg") else 1)
         return {"value": f"przedłużenie o {n} {unit} (ok. {days:+d} dni)", "days": days, "source": _snip(text, m, 30)}

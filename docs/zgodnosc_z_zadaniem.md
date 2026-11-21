@@ -50,7 +50,7 @@ Stan po sprawdzeniu kodu i bazy na paczce organizatora (22 rekordy). Legenda: �
 
 | Wymaganie | Stan | Jak |
 |---|---|---|
-| Opis językiem naturalnym albo wstępne dokumenty | ✅ | tekst, PDF z warstwą tekstową, DOCX |
+| Opis językiem naturalnym albo wstępne dokumenty | ✅ | tekst, PDF, DOCX, skan PDF / zdjęcie (OCR) |
 | Najbardziej zbliżone zakończone inwestycje z wyjaśnieniem podobieństwa | ✅ | cechy o równej wadze, „pasuje X z Y”, tabela pasuje / różni się / brak danych |
 | Łączenie danych strukturalnych z treścią opisów | ✅ | podsektor, formuła, skala, budżet + podobieństwo treści |
 | Prognozy kosztów i czasu, przedziały, liczebność próby, poziom pewności | ✅ | mediana i zakres przy n ≥ 3, wartości per przypadek przy mniejszej próbie, pewność wysoka/średnia/niska |
@@ -64,7 +64,7 @@ Stan po sprawdzeniu kodu i bazy na paczce organizatora (22 rekordy). Legenda: �
 | Model ustawiany w konfiguracji, przykładowy plik konfiguracji | ✅ | `LLM_PROVIDER` / `LLM_MODEL` / `LLM_API_KEY`, `llm.env.example`; domyślnie lokalny Bielik-11B bez klucza |
 | Informacja, gdzie przetwarzane są dane, licencje | ✅ | LICENSE (MIT); README: źródła, miejsce przetwarzania (lokalnie, w procesie; opcjonalnie Ollama/Anthropic), tabela licencji bibliotek i wag Qwen 2.5 (Apache 2.0) |
 | DOCX i PDF z warstwą tekstową | ✅ | |
-| OCR skanów (atut) | ❌ | 6 skanów w BIP Zagrodna – dowodem tytuł i data |
+| OCR skanów (atut) | ✅ | Tesseract (pol), lokalnie: skany PDF, zdjęcia dokumentów, skany w BIP; Docker ma Tesseracta w obrazie |
 | Rejestr źródeł i operacji | 🟨 | cache zapytań, `import_run`, historia decyzji; brak dziennika operacji użytkownika |
 | Skalowalność: wpisy powstają automatycznie | ✅ | import → BZP → BIP → karta bez ręcznego wiązania |
 | Monitoring projektów w toku (atut) | ❌ | |

@@ -18,7 +18,8 @@ RUN pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt
 
 # --- 3. obraz uruchomieniowy ----------------------------------------------------------------
 FROM python:3.12-slim
-RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
+# tesseract-ocr + pol: OCR skanów PDF i zdjęć dokumentów (riskminer/ocr.py)
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 tesseract-ocr tesseract-ocr-pol \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=wheels /wheels /wheels
 COPY requirements.txt .

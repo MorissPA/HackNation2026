@@ -1,11 +1,11 @@
 # Odczyt cech z dokumentów – llama.cpp / bielik-11b-v2.6-instruct
 
-Czas: 0 s
+Czas: 33 s
 
 | Wariant | Pola | Trafne | Częściowo | Błędne | Brak | Wynik pól | Ograniczenia rozpoznane |
 |---|---|---|---|---|---|---|---|
-| reguły | 17 | 17 | 0 | 0 | 0 | **100.0%** | 100.0% |
-| reguły + model | 17 | 17 | 0 | 0 | 0 | **100.0%** | 100.0% |
+| reguły | 19 | 19 | 0 | 0 | 0 | **100.0%** | 100.0% |
+| reguły + model | 19 | 19 | 0 | 0 | 0 | **100.0%** | 100.0% |
 
 | Dokument | Wariant | Pola | Nierozpoznane ograniczenia |
 |---|---|---|---|
@@ -17,3 +17,5 @@ Czas: 0 s
 | aneks_termin_zagrodno.txt | reguły + model | subsector_main: trafne, deadline_days: trafne | — |
 | protokol_koniecznosci_zlawies.txt | reguły | subsector_main: trafne, extra_cost: trafne, deadline_days: trafne | — |
 | protokol_koniecznosci_zlawies.txt | reguły + model | subsector_main: trafne, extra_cost: trafne, deadline_days: trafne | — |
+| pismo_termin_grodzisko_ocr.txt | reguły | subsector_main: trafne, deadline_date: trafne | — |
+| pismo_termin_grodzisko_ocr.txt | reguły + model | subsector_main: trafne, deadline_date: trafne | — |
