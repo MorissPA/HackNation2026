@@ -14,7 +14,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
-from riskminer import analysis, config, db, expert, export, importer, llm, matcher, pipeline, risks
+from riskminer import analysis, config, db, expert, export, geo, importer, llm, matcher, pipeline, risks
 from riskminer.bzp.client import BZPClient
 
 # Arkusz organizatora: domyślnie katalog wyżej (paczka „materialy_dla_uczestnikow”), w kontenerze montowany
@@ -211,7 +211,7 @@ def import_sample(con=Depends(get_con)):
 @app.get("/api/projects")
 def projects(con=Depends(get_con)):
     out = rows(con, """
-        SELECT p.project_id, p.name, p.recipient_name, p.city, p.public_id_type, p.public_id, p.scope,
+        SELECT p.project_id, p.name, p.recipient_name, p.city, p.voivodeship, p.public_id_type, p.public_id, p.scope,
                p.last_fetch_status, p.last_fetch_message, p.last_fetch_at,
                l.status AS link_status, l.method AS link_method,
                (SELECT count(*) FROM gap g WHERE g.project_id=p.project_id) AS n_gaps,
@@ -229,6 +229,10 @@ def projects(con=Depends(get_con)):
         # „Zatwierdzony”: powiązanie potwierdzone i brak otwartych propozycji; inaczej „Do weryfikacji”
         p["review_status"] = ("Zatwierdzony" if p["link_status"] == "potwierdzone" and not p["n_open"]
                               else "Do weryfikacji")
+        lat, lon = geo.get_coords(p.get("city") or "", p.get("recipient_name") or "", p.get("voivodeship") or "")
+        p["lat"] = lat
+        p["lon"] = lon
+        p["gmina"] = geo.extract_gmina_name(p.get("recipient_name") or "", p.get("city") or "")
     return out
 
 
