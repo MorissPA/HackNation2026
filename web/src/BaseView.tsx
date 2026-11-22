@@ -132,7 +132,7 @@ export function BaseView({ selected, onSelect, refreshKey }: { selected: string 
           <div className="filter-head"><div className="panel-title">Kryteria wyszukiwania</div></div>
           <div className="filter-body">
             <div><label className="lbl" htmlFor="f-q">Szukaj</label>
-              <input id="f-q" type="text" className="field" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Gmina, nazwa zadania lub numer BZP…" /></div>
+              <input id="f-q" type="text" className="field" value={q} onChange={(e) => setQ(e.target.value)} /></div>
             <div><label className="lbl" htmlFor="f-gmina">Gmina ({gminas.length})</label>
               <select id="f-gmina" className="field" value={gmina} onChange={(e) => setGmina(e.target.value)}>
                 <option value="ALL">Wszystkie gminy ({gminas.length})</option>

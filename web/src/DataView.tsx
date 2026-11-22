@@ -121,13 +121,18 @@ function CatalogPanel() {
         <p className="panel-sub">Otwarty słownik używany przy klasyfikacji zdarzeń. Nowa kategoria trafia do katalogu dopiero po zatwierdzeniu przez eksperta; od tej chwili widzi ją też model językowy.</p>
       </div>
       <div style={{ display: "grid", gap: 8 }}>
-        <div className="add-row">
-          <input type="text" className="field" value={name} onChange={(e) => setName(e.target.value)} aria-label="Nazwa nowej kategorii"
-            placeholder="Nowa kategoria (np. R16 Zmiana wymogów pozwolenia wodnoprawnego)" onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) add(); }} />
-          <button className="btn" style={{ flexShrink: 0 }} disabled={busy || name.trim().length < 5} onClick={add}>Dodaj kategorię</button>
+        <div>
+          <label className="lbl" htmlFor="new-risk-name">Nazwa nowej kategorii</label>
+          <div className="add-row">
+            <input id="new-risk-name" type="text" className="field" value={name} onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) add(); }} />
+            <button className="btn" style={{ flexShrink: 0 }} disabled={busy || name.trim().length < 5} onClick={add}>Dodaj kategorię</button>
+          </div>
         </div>
-        <input type="text" className="field" value={effects} onChange={(e) => setEffects(e.target.value)} aria-label="Typowe skutki"
-          placeholder="Typowe skutki (opcjonalnie), np. opóźnienie odbioru, roboty dodatkowe" />
+        <div>
+          <label className="lbl" htmlFor="new-risk-effects">Typowe skutki (opcjonalnie)</label>
+          <input id="new-risk-effects" type="text" className="field" value={effects} onChange={(e) => setEffects(e.target.value)} />
+        </div>
       </div>
       <div className="catalog">
         {risks === null ? <div><Spinner /></div> : null}
@@ -153,8 +158,7 @@ function CatalogPanel() {
           <button className="link" onClick={save}>Zapisz reguły</button>
         </div>
         <p className="panel-sub">Dopisywane do instrukcji lokalnego modelu przy każdej analizie dokumentów. Zmiana reguł unieważnia zapamiętane wyniki modelu, więc kolejna analiza policzy je od nowa.</p>
-        <textarea id="llm-rules" rows={7} className="field" value={rules} onChange={(e) => setRules(e.target.value)} style={{ fontSize: "0.875rem" }}
-          placeholder={"1. Nie porównuj szacunkowej wartości zamówienia (netto) z wartością umowy (brutto).\n2. Każdą zmianę umowy z art. 455 ust. 1 pkt 3 lub 4 Pzp traktuj jako zdarzenie ryzyka."} />
+        <textarea id="llm-rules" rows={7} className="field" value={rules} onChange={(e) => setRules(e.target.value)} style={{ fontSize: "0.875rem" }} />
         <span className="caption">{savedAt ? `Ostatni zapis: ${savedAt.slice(0, 16).replace("T", " ")}` : "Reguły nie zostały jeszcze zapisane."}</span>
       </div>
     </div>

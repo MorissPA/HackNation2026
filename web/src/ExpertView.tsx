@@ -68,7 +68,7 @@ function RiskItem({ item, risks, onDone }: { item: QueueItem; risks: Risk[]; onD
           </div>
           <div>
             <label className="lbl" htmlFor="v-comment">Uzasadnienie (opcjonalnie)</label>
-            <input id="v-comment" type="text" className="field" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Np. potwierdzone protokołem konieczności" />
+            <input id="v-comment" type="text" className="field" value={comment} onChange={(e) => setComment(e.target.value)} />
           </div>
           <label className="check">
             <input type="checkbox" checked={exemplar} onChange={(e) => setExemplar(e.target.checked)} />
