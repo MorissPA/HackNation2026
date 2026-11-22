@@ -18,8 +18,8 @@
       --accent-emerald: #10b981;
       --accent-amber: #f59e0b;
       --accent-red: #ef4444;
-      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-      --font-mono: 'JetBrains Mono', monospace;
+      --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+      --font-mono: "JetBrains Mono", monospace;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -41,7 +41,7 @@
       left: 0;
       right: 0;
       height: 54px;
-      background: rgba(11, 17, 30, 0.85);
+      background: rgba(11, 17, 30, 0.9);
       backdrop-filter: blur(8px);
       border-bottom: 1px solid var(--surface-border);
       display: flex;
@@ -86,6 +86,7 @@
       font-size: 13px;
       color: var(--accent-cyan);
       padding: 0 8px;
+      font-weight: 700;
     }
 
     .stage {
@@ -102,7 +103,7 @@
       background: var(--surface);
       border: 1px solid var(--surface-border);
       border-radius: 12px;
-      padding: 44px 52px;
+      padding: 36px 44px;
       display: none;
       flex-direction: column;
       justify-content: space-between;
@@ -111,10 +112,10 @@
     }
     .slide.active {
       display: flex;
-      animation: fadeIn 0.25s ease-out;
+      animation: fadeIn 0.2s ease-out;
     }
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(6px); }
+      from { opacity: 0; transform: translateY(4px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
@@ -122,16 +123,16 @@
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      margin-bottom: 24px;
+      margin-bottom: 16px;
     }
     .slide-title-wrap h2 {
-      font-size: 26px;
+      font-size: 24px;
       font-weight: 800;
       letter-spacing: -0.02em;
       color: #fff;
     }
     .slide-category {
-      font-size: 12px;
+      font-size: 11.5px;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.08em;
@@ -143,7 +144,7 @@
       background: rgba(37, 99, 235, 0.15);
       border: 1px solid var(--accent-blue);
       color: #93c5fd;
-      font-size: 12px;
+      font-size: 11.5px;
       font-weight: 700;
       padding: 4px 10px;
       border-radius: 20px;
@@ -153,24 +154,24 @@
     .slide-body {
       flex: 1;
       display: grid;
-      gap: 20px;
+      gap: 14px;
       min-height: 0;
     }
 
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
 
     .card {
       background: var(--surface-card);
       border: 1px solid var(--surface-border);
       border-radius: 8px;
-      padding: 18px 20px;
+      padding: 14px 16px;
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 7px;
     }
     .card h3 {
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 700;
       color: #fff;
       display: flex;
@@ -178,32 +179,32 @@
       gap: 8px;
     }
     .card p, .card li {
-      font-size: 13px;
+      font-size: 12px;
       color: var(--text-muted);
-      line-height: 1.5;
+      line-height: 1.46;
     }
     .card ul {
       padding-left: 18px;
       display: grid;
-      gap: 6px;
+      gap: 4px;
     }
 
     .kpi {
       background: rgba(6, 182, 212, 0.05);
       border: 1px solid rgba(6, 182, 212, 0.25);
       border-radius: 8px;
-      padding: 16px;
+      padding: 12px 14px;
       text-align: center;
     }
     .kpi .num {
-      font-size: 28px;
+      font-size: 24px;
       font-weight: 800;
       color: var(--accent-cyan);
       font-family: var(--font-mono);
       line-height: 1.1;
     }
     .kpi .lbl {
-      font-size: 12px;
+      font-size: 11px;
       color: var(--text-muted);
       margin-top: 4px;
       font-weight: 600;
@@ -212,11 +213,12 @@
     .quote-box {
       background: #0f172a;
       border-left: 3px solid var(--accent-cyan);
-      padding: 12px 16px;
+      padding: 8px 12px;
       border-radius: 0 6px 6px 0;
-      font-size: 12.5px;
+      font-size: 11.5px;
       font-style: italic;
       color: #cbd5e1;
+      line-height: 1.4;
     }
 
     .slide-footer {
@@ -224,9 +226,9 @@
       justify-content: space-between;
       align-items: center;
       border-top: 1px solid var(--surface-border);
-      padding-top: 14px;
-      margin-top: 20px;
-      font-size: 12px;
+      padding-top: 10px;
+      margin-top: 14px;
+      font-size: 11px;
       color: var(--text-muted);
     }
     .slide-footer .notes {
@@ -239,38 +241,38 @@
                   radial-gradient(circle at 20% 80%, rgba(6, 182, 212, 0.1), transparent 45%),
                   var(--surface);
       text-align: left;
-      padding: 60px 64px;
+      padding: 48px 56px;
     }
     .hero-title {
-      font-size: 46px;
+      font-size: 44px;
       font-weight: 800;
       line-height: 1.1;
       letter-spacing: -0.03em;
       background: linear-gradient(135deg, #ffffff 30%, #94a3b8 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
     .hero-subtitle {
-      font-size: 19px;
+      font-size: 17px;
       font-weight: 500;
       color: var(--accent-cyan);
-      margin-bottom: 28px;
-      max-width: 780px;
+      margin-bottom: 20px;
+      max-width: 860px;
       line-height: 1.4;
     }
     .hero-badges {
       display: flex;
       flex-wrap: wrap;
-      gap: 10px;
-      margin-top: 20px;
+      gap: 8px;
+      margin-top: 14px;
     }
     .hero-chip {
       background: rgba(255, 255, 255, 0.05);
       border: 1px solid var(--surface-border);
-      padding: 6px 14px;
+      padding: 4px 10px;
       border-radius: 20px;
-      font-size: 12.5px;
+      font-size: 11.5px;
       font-weight: 600;
       color: #e2e8f0;
       display: flex;
@@ -278,25 +280,42 @@
       gap: 6px;
     }
 
+    @page {
+      size: landscape;
+      margin: 8mm;
+    }
+
     @media print {
-      body { background: #fff; color: #000; }
-      .top-controls { display: none; }
-      .stage { max-width: 100%; height: auto; margin: 0; }
+      body { background: #fff !important; color: #0f172a !important; }
+      .top-controls { display: none !important; }
+      .stage { max-width: 100% !important; height: auto !important; margin: 0 !important; }
       .slide {
-        position: relative;
+        position: relative !important;
         display: flex !important;
-        page-break-after: always;
-        height: 100vh;
-        border: none;
-        border-radius: 0;
-        box-shadow: none;
-        background: #fff;
-        color: #0f172a;
+        page-break-after: always !important;
+        break-after: page !important;
+        height: 190mm !important;
+        max-height: 190mm !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 8px !important;
+        box-shadow: none !important;
+        background: #ffffff !important;
+        color: #0f172a !important;
+        padding: 24px 28px !important;
+        margin-bottom: 8mm !important;
       }
-      .card { background: #f8fafc; border: 1px solid #cbd5e1; color: #0f172a; }
-      .card h3, .slide-title-wrap h2 { color: #0f172a; }
-      .badge-weight { background: #e0f2fe; color: #0369a1; border-color: #7dd3fc; }
-      .quote-box { background: #f1f5f9; color: #334155; }
+      .card { background: #f8fafc !important; border: 1px solid #cbd5e1 !important; color: #0f172a !important; }
+      .card h3, .slide-title-wrap h2 { color: #0f172a !important; }
+      .card p, .card li { color: #334155 !important; }
+      .badge-weight { background: #e0f2fe !important; color: #0369a1 !important; border-color: #7dd3fc !important; }
+      .quote-box { background: #f1f5f9 !important; color: #1e293b !important; border-left-color: #0284c7 !important; }
+      .hero-title { -webkit-text-fill-color: #0f172a !important; color: #0f172a !important; }
+      .hero-subtitle { color: #0284c7 !important; }
+      .hero-chip { background: #f1f5f9 !important; border-color: #cbd5e1 !important; color: #1e293b !important; }
+      .kpi { background: #f0fdf4 !important; border-color: #86efac !important; }
+      .kpi .num { color: #15803d !important; }
+      .kpi .lbl { color: #475569 !important; }
+      .slide-footer { border-top-color: #e2e8f0 !important; color: #64748b !important; }
     }
   </style>
 </head>
@@ -310,7 +329,7 @@
       <button class="btn-nav" onclick="prevSlide()">◀ Poprzedni</button>
       <span class="slide-indicator" id="slideIndicator">1 / 10</span>
       <button class="btn-nav" onclick="nextSlide()">Następny ▶</button>
-      <button class="btn-nav" onclick="window.print()" style="margin-left: 8px;">🖨️ Zapisz jako PDF</button>
+      <button class="btn-nav" onclick="window.print()" style="margin-left: 8px;">🖨️ Zapisz jako PDF (10 stron)</button>
     </div>
   </div>
 
@@ -319,18 +338,20 @@
     <!-- SLAJD 1: Tytułowy -->
     <div class="slide hero-slide active" data-slide="1">
       <div>
-        <div style="font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent-cyan); margin-bottom: 12px;">
+        <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent-cyan); margin-bottom: 10px;">
           Ministerstwo Funduszy i Polityki Regionalnej · Departament PPP
         </div>
         <h1 class="hero-title">RISK MINER</h1>
         <div class="hero-subtitle">
-          Inteligentna cyfrowa pamięć instytucjonalna inwestycji publicznych. Z rozproszonej dokumentacji kontraktów do bezbłędnego planowania.
+          Inteligentna pamięć instytucjonalna inwestycji publicznych. Z rozproszonych ogłoszeń i aneksów do bezbłędnego planowania przetargów.
         </div>
         <div class="hero-badges">
-          <div class="hero-chip">⚡ Działający prototyp end-to-end</div>
+          <div class="hero-chip">⚡ Działający prototyp end-to-end (FastAPI + React 18 + Vite)</div>
           <div class="hero-chip">🔍 100% Traceability (fakt · obliczenie · propozycja)</div>
-          <div class="hero-chip">🧠 Lokalny model LLM (suwerenność danych)</div>
-          <div class="hero-chip">🗺️ Interaktywna mapa inwestycji gminnych</div>
+          <div class="hero-chip">🇵🇱 Lokalny model Bielik-11B in-process + Tesseract OCR</div>
+          <div class="hero-chip">🗺️ Interaktywna mapa Leaflet z filtrowaniem 19 gmin</div>
+          <div class="hero-chip">🧑‍⚖️ Panel Eksperta + edytowalny otwarty katalog ryzyk R01–R15+</div>
+          <div class="hero-chip">🐳 Docker Ready (jedno polecenie: docker compose up -d)</div>
         </div>
       </div>
       <div class="slide-footer">
@@ -351,12 +372,12 @@
       <div class="slide-body">
         <div class="grid-3">
           <div class="kpi">
-            <div class="num">+15–30%</div>
-            <div class="lbl">Średni wzrost kosztu w aneksach</div>
+            <div class="num">+15–40%</div>
+            <div class="lbl">Rzeczywisty wzrost wypłat w aneksach</div>
           </div>
           <div class="kpi">
-            <div class="num">120–300 dni</div>
-            <div class="lbl">Średnie opóźnienie inwestycji</div>
+            <div class="num">do 277 dni</div>
+            <div class="lbl">Maksymalne opóźnienia w próbie testowej</div>
           </div>
           <div class="kpi">
             <div class="num">3 silosy</div>
@@ -365,25 +386,25 @@
         </div>
         <div class="grid-2">
           <div class="card">
-            <h3>⚠️ Dzisiejsza rzeczywistość urzędnika</h3>
+            <h3>⚠️ Trzy bariery administracji publicznej</h3>
             <ul>
-              <li><b>Rozproszone bazy:</b> Dane w CST2021, postępowania w BZP, a prawdziwe powody problemów ukryte w aneksach i protokołach NIK.</li>
-              <li><b>Brak wymiany wiedzy:</b> Gmina obok popełnia dokładnie te same błędy w PFU/SWZ, z którymi inni mierzyli się 2 lata wcześniej.</li>
-              <li><b>Utrata pamięci:</b> Wraz ze zmianą kadr doświadczenie z realizacji kontraktów bezpowrotnie znika.</li>
+              <li><b>Rozproszone bazy:</b> Dane o dotacjach w CST2021/KPO, postępowania w BZP, a prawda o problemach w aneksach, BIP i raportach NIK.</li>
+              <li><b>Powielanie tych samych błędów:</b> Kolejne gminy wpisują do PFU nierealne terminy i zlecają roboty bez inwentaryzacji sieci (te same spory z art. 455 Pzp).</li>
+              <li><b>Utrata doświadczenia:</b> Wiedza opiera się na pojedynczych urzędnikach i znika wraz ze zmianami kadrowymi.</li>
             </ul>
           </div>
           <div class="card">
             <h3>🎯 Nasza odpowiedź: Risk Miner</h3>
             <ul>
-              <li><b>Automatyczny agregator:</b> Łączy miliony stron dokumentacji w ustrukturyzowaną kartę przypadku.</li>
-              <li><b>Cyfrowy doradca:</b> Analizuje nową inwestycję zanim przetarg zostanie ogłoszony.</li>
-              <li><b>Twarde rekomendacje:</b> Przekłada historyczne błędy na gotowe klauzule umowne i działania zaradcze.</li>
+              <li><b>Automatyczny agregator wiedzy:</b> Łączy miliony stron ogłoszeń, umów i aneksów w ustrukturyzowaną kartę przypadku.</li>
+              <li><b>Cyfrowy doradca urzędnika:</b> Analizuje nową inwestycję (opis, PDF, skan) zanim przetarg zostanie ogłoszony.</li>
+              <li><b>Tarcza ochronna:</b> Przekłada historyczne wpadki na gotowe klauzule umowne i działania zaradcze.</li>
             </ul>
           </div>
         </div>
       </div>
       <div class="slide-footer">
-        <div>Sektor pilotażowy: Inwestycje wodociągowo-kanalizacyjne (zbiorcza baza 22 projektów testowych)</div>
+        <div>Sektor pilotażowy: Inwestycje wodociągowo-kanalizacyjne (22 projekty z paczki MFiPR)</div>
         <div>Slajd 2 / 10</div>
       </div>
     </div>
@@ -400,30 +421,30 @@
       <div class="slide-body">
         <div class="grid-2">
           <div class="card">
-            <h3>🌐 Źródła i integracja bez barier</h3>
+            <h3>🌐 Zasilanie ze źródeł publicznych (BZP + BIP)</h3>
             <ul>
-              <li><b>Hybrydowy klient BZP:</b> Wykorzystanie szybkiego mirrora organizatora (<code>bzp.cytr.us</code>, czas importu ~1 min) oraz oficjalnego API e-Zamówienia jako zapasu.</li>
-              <li><b>Wieloformatowy import:</b> XLSX, CSV, DOCX i PDF z warstwą tekstową.</li>
-              <li><b>Idempotentny UPSERT:</b> Aktualizacje danych nie nadpisują wcześniejszych decyzji eksperckich.</li>
+              <li><b>Hybrydowy klient BZP:</b> Szybki mirror organizatora (<code>bzp.cytr.us</code>, import 22 projektów w ~1 min) + oficjalne API jako zapas z limitem tempa.</li>
+              <li><b>Drugie źródło – BIP samorządów:</b> Odczyt ogłoszeń i dokumentów z BIP gminy (system d-bip, np. Zagrodno) ze wskazaniem numerów stron.</li>
+              <li><b>Wyniki testu integracji:</b> <b style="color: var(--accent-emerald);">15 poprawnych</b>, <b style="color: var(--accent-amber);">7 niepewnych (do decyzji)</b>, <b style="color: var(--accent-emerald);">0 błędnych (0% fałszywych!)</b>.</li>
             </ul>
           </div>
           <div class="card">
-            <h3>🧩 Przełom: KPO Matcher po 6 kryteriach</h3>
-            <p>Projekty KPO nie posiadały numeru BZP w arkuszu. System dopasowuje je automatycznie według kryteriów zadania:</p>
+            <h3>🧩 KPO Matcher po 6 kryteriach zadania</h3>
+            <p>Projekty KPO nie miały numeru BZP w arkuszu. System łączy je automatycznie po twardych kryteriach regulaminowych:</p>
             <ul>
-              <li><b>NIP zamawiającego:</b> Warunek konieczny (szukanie w ogłoszeniach podmiotu).</li>
-              <li><b>Nazwa i miejscowość:</b> Udział słów kluczowych i rdzeni fleksyjnych.</li>
-              <li><b>Kody CPV:</b> Zgodność z robotami wodno-kanalizacyjnymi.</li>
-              <li><b>Wartość i daty:</b> Czy umowy mieszczą się w widełkach 30–125% budżetu KPO.</li>
+              <li><b>NIP zamawiającego:</b> Warunek konieczny (przeszukiwanie bazy danego NIP).</li>
+              <li><b>Nazwa i miejscowość:</b> Analiza słów kluczowych i rdzeni fleksyjnych.</li>
+              <li><b>Kody CPV:</b> Zgodność z robotami budowlanymi branży wod-kan.</li>
+              <li><b>Wartość i daty:</b> Sprawdzenie widełek 30–125% wartości KPO oraz okna naboru.</li>
             </ul>
           </div>
         </div>
         <div class="quote-box">
-          „Jeśli jeden kandydat ma wysoką pewność – powiązanie jest proponowane automatycznie. W przypadku niejednoznaczności – trafia do szybkiego wyboru w Panelu Eksperta.”
+          „Gdy jeden kandydat spełnia kryteria z wysoką pewnością – powiązanie jest proponowane automatycznie. W przypadku niejednoznaczności – trafia do szybkiego zatwierdzenia w Panelu Eksperta.”
         </div>
       </div>
       <div class="slide-footer">
-        <div>Zgodność: Rekordy BZP/TED, OCID, NIP, CST2021</div>
+        <div>Zgodność: CST2021, BZP/TED, KPO, OCID, NIP, BIP (d-bip). Kompletny pipeline importu bez duplikatów.</div>
         <div>Slajd 3 / 10</div>
       </div>
     </div>
@@ -441,32 +462,32 @@
         <div class="grid-3">
           <div class="card">
             <h3>📌 1. Fakt</h3>
-            <p>Wartość odczytana wprost z ogłoszenia BZP.</p>
+            <p>Odczyt ze znanego pola ogłoszenia BZP ze wskazaniem sekcji, punktu i dosłownym cytatem.</p>
             <div class="quote-box">„Termin: 18 miesięcy; Sekcja IV.2.1, Ogłoszenie 2023/BZP...”</div>
           </div>
           <div class="card">
             <h3>📐 2. Obliczenie</h3>
-            <p>Wynik operacji z jawną formułą matematyczną.</p>
-            <div class="quote-box">„Opóźnienie = 142 dni (Faktyczny koniec - Planowany)”</div>
+            <p>Wartość wyliczona z jawną formułą matematyczną.</p>
+            <div class="quote-box">„Opóźnienie = 142 dni; Formuła: Data faktyczna - Planowana”</div>
           </div>
           <div class="card">
             <h3>💡 3. Propozycja</h3>
-            <p>Wniosek AI podlegający weryfikacji eksperta.</p>
+            <p>Wniosek AI podlegający weryfikacji przez człowieka.</p>
             <div class="quote-box">„Ryzyko R03: kolizja z gazociągiem w aneksie nr 2”</div>
           </div>
         </div>
         <div class="card">
-          <h3>🏛️ Porządek w poziomach finansowych (Koniec z błędami metodologicznymi!)</h3>
-          <p>System bezwzględnie rozdziela i nie porównuje bezpośrednio:</p>
-          <div style="display: flex; gap: 14px; margin-top: 6px;">
-            <span class="hero-chip">Szacunek zamówienia (netto, BZP)</span>
-            <span class="hero-chip">Wartość zawartej umowy (brutto)</span>
-            <span class="hero-chip">Kwota projektu / KPO (z dofinansowaniem)</span>
+          <h3>🏛️ Porządek w poziomach finansowych (Eliminacja błędów metodologicznych!)</h3>
+          <p>System bezwzględnie rozdziela i blokuje bezpośrednie porównywanie wielkości innego rodzaju:</p>
+          <div style="display: flex; gap: 10px; margin-top: 6px; flex-wrap: wrap;">
+            <span class="hero-chip">Szacunek zamówienia (netto z BZP, bez VAT)</span>
+            <span class="hero-chip">Wartość zawartej umowy (brutto z VAT)</span>
+            <span class="hero-chip">Kwota przedsięwzięcia KPO (z wkładem własnym)</span>
           </div>
         </div>
       </div>
       <div class="slide-footer">
-        <div>Każda liczba w systemie posiada link do ogłoszenia źródłowego oraz dokładny cytat.</div>
+        <div>Zasada: Każda liczba i wniosek w systemie prowadzi do źródła, linku, numeru sekcji i dosłownego cytatu.</div>
         <div>Slajd 4 / 10</div>
       </div>
     </div>
@@ -476,77 +497,80 @@
       <div class="slide-header">
         <div class="slide-title-wrap">
           <span class="slide-category">Kontrola ekspercka</span>
-          <h2>Human-in-the-Loop: Ekspert decyduje, system się uczy</h2>
+          <h2>Human-in-the-Loop: Panel Eksperta i otwarty katalog</h2>
         </div>
         <div class="badge-weight">Ocena: 20%</div>
       </div>
       <div class="slide-body">
         <div class="grid-2">
           <div class="card">
-            <h3>🛡️ Żadnych halucynacji bez nadzoru</h3>
+            <h3>🛡️ Zero halucynacji w statystykach</h3>
             <ul>
-              <li>Wszystkie niepewne dopasowania KPO oraz wyekstrahowane ryzyka R01–R15 trafiają do kolejki <b>„Weryfikacja eksperta”</b>.</li>
+              <li>Wszystkie niejednoznaczne powiązania KPO oraz propozycje ryzyk R01–R15 trafiają do kolejki <b>„Do weryfikacji”</b>.</li>
               <li>Ekspert jednym kliknięciem: <b>Zatwierdza</b>, <b>Koryguje kategorię</b> lub <b>Odrzuca</b> wniosek AI.</li>
-              <li>Odrzucone powiązania są trwale wykluczane z kolejnych rankingów.</li>
+              <li><b>Oznaczanie wzorców:</b> Możliwość oznaczenia rekordu jako <i>przykład wzorcowy</i> (exemplar) dla wyższej wagi w porównaniach.</li>
+              <li><b>Wskaźnik pewności:</b> Automatyczna detekcja zgodności wniosku modelu ze słownikiem reguł (pewność wysoka/niska).</li>
             </ul>
           </div>
           <div class="card">
-            <h3>📜 Pełny rejestr decyzji (Audit Trail)</h3>
+            <h3>📜 Otwarty katalog ryzyk i reguły w GUI</h3>
             <ul>
-              <li>Tabela <code>expert_decision</code> rejestruje datę, autora, zmianę wartości i uzasadnienie.</li>
-              <li>Wiedza zatwierdzona przez człowieka zyskuje <b>podwójną wagę (w = 1.0)</b> w module analizy nowych projektów.</li>
-              <li>Wygodne zarządzanie regułami wiedzy bez konieczności zmian w kodzie.</li>
+              <li><b>Otwarty katalog w zakładce „Dane i reguły”:</b> Urzędnik może dodawać nowe kategorie ryzyk (R16, R17...) i zatwierdzać je w GUI bez dotykania kodu.</li>
+              <li><b>Edycja reguł interpretacyjnych LLM:</b> Formularz konfiguracji promptu analitycznego bezpośrednio w aplikacji (tabela <code>setting</code>).</li>
+              <li><b>Rejestr audytowy (Audit Trail):</b> Tabela <code>expert_decision</code> utrwala datę, autora, starą/nową wartość i komentarz.</li>
+              <li><b>Waga wiedzy:</b> Zatwierdzone w = 1.0, propozycje w = 0.5, odrzucone w = 0.0.</li>
             </ul>
           </div>
         </div>
         <div class="kpi" style="text-align: left; display: flex; justify-content: space-between; align-items: center;">
           <div>
-            <div style="font-weight: 700; color: #fff;">Status bazy testowej w Risk Miner:</div>
-            <div style="font-size: 13px; color: var(--text-muted);">15 powiązań potwierdzonych · 7 do weryfikacji · 30 propozycji ryzyk w kolejce</div>
+            <div style="font-weight: 700; color: #fff;">Stan bazy pilotażowej w Risk Miner:</div>
+            <div style="font-size: 11.5px; color: var(--text-muted);">15 powiązań potwierdzonych · 7 do weryfikacji · propozycje ryzyk w kolejce · pełny audyt decyzji</div>
           </div>
-          <span class="badge-weight">Gotowy moduł produkcyjny</span>
+          <span class="badge-weight">Moduł wdrożony w GUI</span>
         </div>
       </div>
       <div class="slide-footer">
-        <div>Zgodność: Pełna edytowalność założeń i uniwersalność dla innych sektorów administracji.</div>
+        <div>Zgodność: Pełna edytowalność założeń bez programisty i uniwersalność dla kolejnych sektorów administracji.</div>
         <div>Slajd 5 / 10</div>
       </div>
     </div>
 
-    <!-- SLAJD 6: Ekstrakcja Ryzyk przez LLM -->
+    <!-- SLAJD 6: Ekstrakcja Ryzyk przez LLM i OCR -->
     <div class="slide" data-slide="6">
       <div class="slide-header">
         <div class="slide-title-wrap">
           <span class="slide-category">Jakość analizy dokumentów</span>
-          <h2>Lokalny LLM i głęboka analiza przyczynowa</h2>
+          <h2>Lokalny model Bielik-11B oraz OCR skanów</h2>
         </div>
         <div class="badge-weight">Ocena: 20%</div>
       </div>
       <div class="slide-body">
         <div class="grid-2">
           <div class="card">
-            <h3>🧠 Model w procesie aplikacji (In-Process)</h3>
+            <h3>🇵🇱 Polski model Bielik-11B lokalnie (In-Process)</h3>
             <ul>
-              <li><b>Zero zewnętrznych zależności:</b> Lokalny model <code>Qwen-2.5-1.5B-Instruct</code> zoptymalizowany pod CPU.</li>
-              <li><b>100% suwerenności danych:</b> Analiza aneksów i dokumentów BIP odbywa się lokalnie na stacji urzędnika lub w bezpiecznym środowisku UE.</li>
-              <li><b>Wymienność modeli:</b> Możliwość podpięcia Anthropic Claude lub Ollama za pomocą zmiennych środowiskowych.</li>
+              <li><b>100% suwerenności danych:</b> Analiza w procesie aplikacji (silnik <code>llama_cpp</code>) na CPU stacji roboczej lub serwerze lokalnym bez wycieku danych za granicę.</li>
+              <li><b>Podział ról (Zero błędów w liczbach):</b> Model odpowiada za interpretację językową, przyczyny, luki i sprzeczności. Kwoty i daty chronione są deterministycznymi regułami.</li>
+              <li><b>Weryfikacja cytatów:</b> Automatyczne sprawdzanie cytatów w treści źródłowej – eliminacja zmyślonych uzasadnień.</li>
+              <li><b>Skuteczność:</b> 19/19 poprawnie wyekstrahowanych pól w testach ewaluacyjnych.</li>
             </ul>
           </div>
           <div class="card">
-            <h3>🔬 Od słów kluczowych do zrozumienia przyczyn</h3>
+            <h3>📷 OCR skanów (Wymóg z regulaminu konkursu)</h3>
             <ul>
-              <li>Model analizuje skomplikowane uzasadnienia aneksów (np. <i>„odmienne uwarunkowania gruntowo-wodne uniemożliwiające posadowienie kolektora...”</i>).</li>
-              <li>Precyzyjnie przypisuje przyczynę do katalogu <b>R01–R15</b> i wyciąga zdanie dowodowe.</li>
-              <li><b>Otwarty katalog:</b> Przy nietypowych zdarzeniach proponuje nową kategorię do zatwierdzenia przez eksperta.</li>
+              <li><b>Obsługa trudnych materiałów:</b> Moduł Tesseract (pol) przetwarza skany PDF bez warstwy tekstowej, zdjęcia dokumentów (PNG, JPG, TIFF) oraz skany pism w BIP.</li>
+              <li><b>Optymalizacja obrazu:</b> Automatyczne przetwarzanie stron i detekcja formatu przed podaniem do analizy.</li>
+              <li><b>Gotowość kontenerowa:</b> Pakiety OCR wbudowane w obraz Docker bez konieczności zewnętrznych licencji.</li>
             </ul>
           </div>
         </div>
         <div class="quote-box">
-          „Wykryte ryzyko: <b>R02 (Stan techniczny i geologia)</b> · Skutek: +142 000 zł i przedłużenie o 60 dni · Dowód: Ogłoszenie o zmianie umowy nr 2023/BZP 00412...”
+          „Wykryte ryzyko: <b>R02 (Stan techniczny i geologia)</b> · Przyczyna: Kolizja z niezinwentaryzowanym kolektorem · Cytat: Aneks nr 2, pkt 4.1... · Dowód z BIP: strona 3 protokołu konieczności”
         </div>
       </div>
       <div class="slide-footer">
-        <div>Zgodność: Odpowiedź ustrukturyzowana JSON ze ścisłą walidacją schematu.</div>
+        <div>Konfigurowalność: Możliwość przełączenia na Claude, Ollama lub Qwen 2.5 w pliku konfiguracyjnym .env.</div>
         <div>Slajd 6 / 10</div>
       </div>
     </div>
@@ -556,7 +580,7 @@
       <div class="slide-header">
         <div class="slide-title-wrap">
           <span class="slide-category">Główny moduł doradczy</span>
-          <h2>Analiza nowej inwestycji: Dobór grupy porównawczej</h2>
+          <h2>Analiza nowej inwestycji: Dobór grupy i sprzeczności</h2>
         </div>
         <div class="badge-weight" style="background: rgba(16, 185, 129, 0.2); border-color: var(--accent-emerald); color: #6ee7b7;">Kluczowa ocena: 25%</div>
       </div>
@@ -564,28 +588,34 @@
         <div class="grid-3">
           <div class="card">
             <h3>📥 Wejście</h3>
-            <p>Urzędnik wkleja opis słowny lub wgrywa plik <b>PDF / DOCX</b> (np. wstępne PFU lub studium).</p>
+            <p>Urzędnik wkleja opis słowny lub wgrywa plik: <b>PDF, DOCX, TXT lub skan/zdjęcie (OCR)</b>.</p>
           </div>
           <div class="card">
             <h3>⚙️ Ekstrakcja cech</h3>
-            <p>System sam wyciąga: podsektor, formułę (PFU vs projekt), skalę (km, RLM), budżet i ograniczenia.</p>
+            <p>System wyciąga: podsektor, formułę (PFU vs projekt), skalę (km, RLM), budżet i ograniczenia.</p>
           </div>
           <div class="card">
             <h3>🎯 Transparentny ranking</h3>
             <p>Porównanie cech o równej wadze. System wyjaśnia: <b>„pasuje 6 z 7 cech”</b> (brak ukrytych wag!).</p>
           </div>
         </div>
-        <div class="card">
-          <h3>📐 Hierarchia podobieństwa oparta na faktach</h3>
-          <ol style="padding-left: 20px; font-size: 13px; color: var(--text-muted); display: grid; gap: 6px;">
-            <li><b>1. Priorytet branżowy:</b> Najpierw ten sam podsektor główny (oczyszczalnia ścieków nie jest porównywana z siecią wodociągową!).</li>
-            <li><b>2. Odsetek zgodnych cech:</b> Zgodność formuły realizacji, skali budżetu (widełki) i znanych ograniczeń terenowych.</li>
-            <li><b>3. Rozstrzyganie remisów:</b> Semantyczne podobieństwo leksykalne opisu zamówienia (Jaccard).</li>
-          </ol>
+        <div class="grid-2">
+          <div class="card">
+            <h3>📐 Trójstopniowa hierarchia podobieństwa</h3>
+            <ol style="padding-left: 18px; font-size: 11.5px; color: var(--text-muted); display: grid; gap: 3px;">
+              <li><b>1. Priorytet branżowy:</b> Najpierw ten sam podsektor główny (oczyszczalnia ścieków jest porównywana tylko z oczyszczalniami!).</li>
+              <li><b>2. Odsetek zgodnych cech:</b> Zgodność formuły realizacji, skali budżetu (widełki) i znanych ograniczeń terenowych.</li>
+              <li><b>3. Rozstrzyganie remisów:</b> Semantyczne podobieństwo opisu (indeks Jaccarda na rdzeniach słów).</li>
+            </ol>
+          </div>
+          <div class="card">
+            <h3>⚡ Detekcja sprzeczności w dokumentach</h3>
+            <p>Unikalna funkcja w GUI: Gdy dokument podaje sprzeczne dane (np. dwie różne kwoty brutto/netto lub długości sieci), system wykrywa konflikt i pozwala urzędnikowi <b>jednym kliknięciem wybrać właściwy wariant</b> do obliczeń.</p>
+          </div>
         </div>
       </div>
       <div class="slide-footer">
-        <div>Obsługa wejścia: PDF z warstwą tekstową, DOCX, TXT oraz gotowe szablony sektorowe.</div>
+        <div>Pełna transparentność: Urzędnik widzi dokładną listę cech pasujących, różniących się oraz braków w opisie.</div>
         <div>Slajd 7 / 10</div>
       </div>
     </div>
@@ -602,35 +632,35 @@
       <div class="slide-body">
         <div class="grid-2">
           <div class="card">
-            <h3>📊 Prognoza kosztów i terminów z niepewnością</h3>
+            <h3>📊 Prognoza kosztów i czasu z niepewnością</h3>
             <ul>
-              <li><b>Mierzalne odchylenia:</b> Mediana, minimum i maksimum wzrostu wypłat oraz opóźnień z bazy wykonanych umów.</li>
-              <li><b>Uczciwe komunikowanie próby:</b> System podaje wielkość próby ($n$) i poziom pewności (wysoka / średnia / niska).</li>
-              <li><b>Korygowany budżet:</b> Estymacja budżetu po typowym wzroście kontraktowym.</li>
+              <li><b>Twarde statystyki:</b> Mediana, minimum i maksimum wzrostu wypłat oraz opóźnień z bazy umów (np. oczyszczalnia: mediana +6.8%, opóźnienie 81 dni).</li>
+              <li><b>Uczciwa próba:</b> Jawna liczebność próby ($n$) i poziom pewności (wysoka / średnia / niska).</li>
+              <li><b>Korygowany budżet:</b> Realna estymacja budżetu po uwzględnieniu typowych ryzyk.</li>
             </ul>
           </div>
           <div class="card">
             <h3>🛡️ Gotowe tarcze ochronne dla urzędnika</h3>
             <ul>
-              <li><b>Czerwone flagi:</b> Wykrycie zagrożeń (np. R03 – kolizje z siecią, R04 – pozwolenia wodnoprawne).</li>
-              <li><b>Działanie zaradcze:</b> Co zweryfikować w PFU przed ogłoszeniem przetargu.</li>
-              <li><b>Zapis do umowy:</b> Gotowa klauzula (art. 455 Pzp) chroniąca zamawiającego przed roszczeniami.</li>
+              <li><b>Czerwone flagi:</b> Ważona siła sygnału (np. R03 – kolizje z siecią, R04 – pozwolenia wodnoprawne).</li>
+              <li><b>Działanie zaradcze:</b> Co sprawdzić w terenie i PFU przed ogłoszeniem przetargu.</li>
+              <li><b>Zapis do umowy:</b> Gotowa klauzula (art. 455 Pzp) chroniąca zamawiającego przed roszczeniami wykonawców.</li>
             </ul>
           </div>
         </div>
         <div class="card" style="flex-direction: row; justify-content: space-between; align-items: center;">
           <div>
             <div style="font-size: 13px; font-weight: 700; color: #fff;">Checklista wodociągowa MFiPR & Eksport</div>
-            <div style="font-size: 12px; color: var(--text-muted);">Weryfikacja 9 pytań formalnych oraz eksport pełnego raportu do JSON i CSV.</div>
+            <div style="font-size: 11.5px; color: var(--text-muted);">Weryfikacja 9 pytań formalnych oraz eksport pełnego raportu do JSON i CSV (z UTF-8 BOM dla Excela).</div>
           </div>
           <div style="display: flex; gap: 8px;">
-            <span class="hero-chip">CSV Export</span>
-            <span class="hero-chip">JSON Export</span>
+            <span class="hero-chip">CSV z BOM dla Excela</span>
+            <span class="hero-chip">Ustrukturyzowany JSON</span>
           </div>
         </div>
       </div>
       <div class="slide-footer">
-        <div>Zgodność: Wyniki nie są uwięzione w oknie czatu – spełniają wymóg zapisu ustrukturyzowanego.</div>
+        <div>Zgodność: Wyniki nie są uwięzione w oknie rozmowy – spełniają wymóg zapisu ustrukturyzowanego.</div>
         <div>Slajd 8 / 10</div>
       </div>
     </div>
@@ -649,29 +679,31 @@
           <div class="card">
             <h3>🗺️ Interaktywna mapa Polski w Leaflet</h3>
             <ul>
-              <li><b>Geolokalizacja gmin:</b> Wizualizacja inwestycji z kafelkami OpenStreetMap.</li>
-              <li><b>Dwukierunkowe filtrowanie:</b> Kliknięcie w gminę na mapie natychmiast filtruje listę projektów w tabeli i odwrotnie.</li>
-              <li><b>Wizualne kodowanie ryzyk:</b> Znaczniki zielone (zatwierdzone / bezpieczne) oraz pomarańczowe (zdiagnozowane ryzyka).</li>
+              <li><b>Geolokalizacja gmin:</b> Wizualizacja inwestycji na mapie OpenStreetMap z przypisaniem do 19 gmin.</li>
+              <li><b>Dwukierunkowe filtrowanie:</b> Kliknięcie w gminę na mapie filtruje listę projektów w tabeli i odwrotnie.</li>
+              <li><b>Kodowanie kolorystyczne:</b> Znaczniki zielone (zatwierdzone / bez ryzyk) oraz pomarańczowe (otwarte ryzyka/do oceny).</li>
+              <li><b>Szybkie czyszczenie filtra:</b> Widoczny chip aktywnego filtra gminy z przyciskiem kasowania.</li>
             </ul>
           </div>
           <div class="card">
             <h3>🖥️ Interfejs urzędowy najwyższej próby</h3>
             <ul>
-              <li><b>React 18 + Vite + TypeScript:</b> Błyskawiczny czas reakcji, pełne wsparcie klawiatury.</li>
+              <li><b>React 18 + Vite + TypeScript:</b> Błyskawiczny czas reakcji SPA, pełne wsparcie klawiatury.</li>
               <li><b>3 tryby widoku:</b> <i>[ 🗺️ Widok podzielony ]</i>, <i>[ Tylko mapa ]</i>, <i>[ Tylko tabela ]</i>.</li>
-              <li><b>Boczna karta szczegółów (Drawer):</b> Błyskawiczny podgląd drzewa relacji i aneksów bez opuszczania kontekstu.</li>
+              <li><b>Boczna karta szczegółów (Drawer):</b> Błyskawiczny podgląd drzewa relacji i aneksów bez opuszczania kontekstu bazy.</li>
+              <li><b>4 moduły w aplikacji:</b> Nowa inwestycja, Do weryfikacji, Baza projektów, Dane i reguły.</li>
             </ul>
           </div>
         </div>
         <div class="kpi" style="text-align: left;">
-          <div style="font-weight: 700; color: #fff;">Dostępność cyfrowa dla administracji:</div>
-          <div style="font-size: 12.5px; color: var(--text-muted); margin-top: 4px;">
-            Zaprojektowane z myślą o specjalistach merytorycznych bez wiedzy programistycznej. Kontrast, czytelne typografie i pełna audytowalność.
+          <div style="font-weight: 700; color: #fff;">Dostępność cyfrowa dla administracji publicznej (WCAG 2.1 AA):</div>
+          <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 4px;">
+            Przełącznik wysokiego kontrastu, 3 rozmiary tekstu (A / A+ / A++), focus ringi, etykiety ARIA i pełna audytowalność każdego kroku.
           </div>
         </div>
       </div>
       <div class="slide-footer">
-        <div>Technologia: Leaflet, React, TypeScript, FastAPI, WCAG 2.1 AA.</div>
+        <div>Technologia: Leaflet, OpenStreetMap, React, TypeScript, FastAPI, WCAG 2.1 AA.</div>
         <div>Slajd 9 / 10</div>
       </div>
     </div>
@@ -691,22 +723,22 @@
             <h3>🐳 Docker Ready</h3>
             <p>Uruchomienie jednym poleceniem:</p>
             <div class="quote-box"><code>docker compose up -d --build</code></div>
-            <p style="font-size: 12px; margin-top: 4px;">Zintegrowane API, frontend i lokalny LLM.</p>
+            <p style="font-size: 11px; margin-top: 4px;">Zintegrowane API, frontend, OCR i lokalny LLM.</p>
           </div>
           <div class="card">
-            <h3>🔒 Bezpieczeństwo</h3>
-            <p>Zero vendor lock-in. 100% otwarty kod (Open Source), brak transferu wrażliwych danych poza infrastrukturę publiczną.</p>
+            <h3>🔒 Bezpieczeństwo i Eksport</h3>
+            <p>Zero vendor lock-in. 100% Open Source. Eksport całej bazy do JSON oraz ZIP z 13 tabelami CSV.</p>
           </div>
           <div class="card">
             <h3>📈 Skalowalność</h3>
-            <p>Gotowa architektura pod kolejne sektory: drogownictwo, energetyka, kubatura, infrastruktura zdrowotna.</p>
+            <p>Uniwersalny model danych gotowy na kolejne sektory: drogi, szpitale, energetyka, kubatura.</p>
           </div>
         </div>
         <div class="card">
-          <h3>🚀 Kierunki rozwoju pilotażu MFiPR</h3>
+          <h3>🚀 Rekomendowane kierunki rozwoju pilotażu MFiPR</h3>
           <div class="grid-2" style="margin-top: 4px;">
             <div><b>1. Moduł wczesnego ostrzegania:</b> Automatyczny nasłuch BZP/e-Zamówień dla trwających inwestycji i alerty o nowych aneksach.</div>
-            <div><b>2. Centralna baza klauzul:</b> Katalog dobrych praktyk umownych dla Departamentu PPP i jednostek samorządu terytorialnego.</div>
+            <div><b>2. Centralny bank wzorców PPP:</b> Repozytorium sprawdzonych klauzul umownych dla Departamentu PPP i samorządów.</div>
           </div>
         </div>
       </div>
@@ -723,10 +755,10 @@
     const totalSlides = 10;
 
     function updateSlide() {
-      document.querySelectorAll('.slide').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll(".slide").forEach(s => s.classList.remove("active"));
       const active = document.querySelector(`.slide[data-slide="${currentSlide}"]`);
-      if (active) active.classList.add('active');
-      document.getElementById('slideIndicator').textContent = `${currentSlide} / ${totalSlides}`;
+      if (active) active.classList.add("active");
+      document.getElementById("slideIndicator").textContent = `${currentSlide} / ${totalSlides}`;
     }
 
     function nextSlide() {
@@ -743,10 +775,10 @@
       }
     }
 
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'ArrowRight' || e.key === ' ') {
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowRight" || e.key === " ") {
         nextSlide();
-      } else if (e.key === 'ArrowLeft') {
+      } else if (e.key === "ArrowLeft") {
         prevSlide();
       }
     });

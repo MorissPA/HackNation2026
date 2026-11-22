@@ -173,8 +173,7 @@ export function AnalysisView({ minChars }: { minChars?: number }) {
         <div>
           <label htmlFor="analysis-text" className="lbl">Opis zakresu, lokalizacji, szacowanego budżetu oraz terminu</label>
           {minChars && <span className="caption">Opis musi mieć co najmniej {minChars} znaków.</span>}
-          <textarea id="analysis-text" rows={5} className="field" value={text} onChange={(e) => { setText(e.target.value); setResult(null); }}
-            placeholder="Wpisz opis planowanej inwestycji wodociągowej lub kanalizacyjnej…" />
+          <textarea id="analysis-text" rows={5} className="field" value={text} onChange={(e) => { setText(e.target.value); setResult(null); }} />
         </div>
         <div className="input-foot">
           <label className="attach">
